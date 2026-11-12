@@ -203,6 +203,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
         <form id="lb-form"><label for="lb-name">Add this run to the leaderboard</label>
           <div class="lb-row"><input id="lb-name" maxlength="16" placeholder="Your name" autocomplete="nickname"><button id="lb-post" type="submit">Post</button></div>
           <span id="lb-msg" aria-live="polite"></span></form>
+        <span class="best" id="lb-note" hidden></span>
         <ol></ol>
       </div>
       <button class="go" id="again">New run</button>
@@ -217,7 +218,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
-const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, BUFFER = 4, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
+const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.8, 1, 1.22], OUT = [.7, 1, 1.4], BUYS = [1, 2, 3], APPETITE = [1, 1.6, 2.4], RHO = .92, SIZE_NAME = ['small', 'mid-size', 'large']; // world sizes: body, output, goods bought, share of demand; RHO = system demand as a fraction of supply
@@ -320,10 +321,15 @@ function awaken() {
   sfx('join'); logEvent('joined: ' + SIZE_NAME[p.size] + ' ' + GOODS[p.good], p.name);
   toast(`${p.name} joins the network: a ${SIZE_NAME[p.size]} world selling ${GOODS[p.good]}.`);
 }
-function reach(s) { // open orders for this world's good that its routes can serve: at stops it shares a route with, plus a few more if a depot can pass them on
-  const g = s.good, seen = new Set(); let n = 0, relay = false;
-  for (const r of G.routes) if (r.stops.includes(s)) { for (const b of r.stops) if (b !== s && !seen.has(b) && b.wants.includes(g)) { seen.add(b); n += Math.max(0, open(b, g)); } relay = relay || relays(r, g, s); }
-  if (relay) { let far = 0; for (const b of G.planets) if (!seen.has(b) && b.wants.includes(g)) far += Math.max(0, open(b, g)); n += Math.min(BUFFER, far); }
+function onwardOpen(d, g, from, seen) { // open orders for g that goods left at depot d could go on to fill: at the stops of the other routes through d, and beyond any depots on those
+  seen = seen || new Set(from ? from.stops : []); seen.add(d); let n = 0;
+  for (const r2 of G.routes) if (r2 !== from && r2.stops.includes(d)) for (const b of r2.stops) if (!seen.has(b)) { seen.add(b); n += Math.max(0, open(b, g)); if (b.depot) n += onwardOpen(b, g, r2, seen); }
+  return n;
+}
+function reach(s) { // open orders for this world's good that its routes can serve: at stops it shares a route with, plus those a depot on its routes can pass goods on to
+  const g = s.good, seen = new Set([s]), mine = G.routes.filter(r => r.stops.includes(s)); let n = 0;
+  for (const r of mine) for (const b of r.stops) if (!seen.has(b)) { seen.add(b); n += Math.max(0, open(b, g)); }
+  for (const r of mine) for (const d of r.stops) if (d.depot && d !== s && onward(d, g, r)) n += Math.max(0, onwardOpen(d, g, r, seen) + AHEAD - buffered(d, g));
   return n;
 }
 const tempoNow = () => 1 / Math.max(.8, 16 * .999 ** G.t);
@@ -387,15 +393,17 @@ function stepShip(s, dt) {
 /* How a freighter decides what to do at a stop. Every unit it loads is tied to one specific open order (or to a depot that
    will pass it on), so two freighters never load for the same order, and it only loads for stops ahead of it. */
 const side = (r, i, d) => d > 0 ? r.stops.slice(i + 1) : r.stops.slice(0, i).reverse(); // the stops in one direction, nearest first
-const isSource = (r, q) => buysOn(r, q.good, q) || relays(r, q.good, q); // something this world makes can be sold along this route
+const takes = (r, g, q) => buysOn(r, g, q) || relays(r, g, q); // this route can sell g at another stop, or hand it to a depot further along
+const isSource = (r, q) => takes(r, q.good, q) // a stop worth waiting at: its own good sells along this route,
+  || (q.depot && (q.items.some(g => takes(r, g, q)) || G.routes.some(r1 => r1 !== r && r1.stops.includes(q) && r1.stops.some(a => a !== q && takes(r, a.good, q))))); // or its depot is fed goods this route carries on
 function buffered(d, g) { let n = d.items.filter(v => v === g).length; for (const o of G.ships) for (const c of o.cargo) if (c.relay && c.to === d && c.g === g) n++; return n; }
 function jobs(r, q) { // what a freighter on route r could usefully load at world q, as [good, destination, isRelay, fromDepot]
   const out = [], others = r.stops.filter(z => z !== q);
-  if (q.stock > 0) { const g = q.good, direct = buysOn(r, g, q);
-    for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, false]);
-      else if (!direct && z.depot && z.items.length < DEPOT_CAP && buffered(z, g) < BUFFER && onward(z, g, r)) out.push([g, z, true, false]); } }
-  if (q.depot) for (const g of new Set(q.items)) for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, true]);
-    else if (z.depot && z.items.length < DEPOT_CAP && !onward(q, g, r) && onward(z, g, r, new Set([q]))) out.push([g, z, true, true]); }
+  // a unit goes to a depot when orders beyond it, on other routes, outnumber what that depot already holds or has coming. A depot also keeps a couple
+  // of units ahead of demand for each good it passes on, which is what makes a relay quick enough to be worth building
+  const relay = (z, g) => z.depot && z.items.length < DEPOT_CAP && onward(z, g, r) && buffered(z, g) < onwardOpen(z, g, r) + AHEAD;
+  if (q.stock > 0) { const g = q.good; for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, false]); else if (relay(z, g)) out.push([g, z, true, false]); } }
+  if (q.depot) for (const g of new Set(q.items)) for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, true]); else if (relay(z, g)) out.push([g, z, true, true]); }
   return out;
 }
 function pull(s, r, i, d) { // is there a reason to head this way: cargo to deliver, goods here for an order that way, or goods waiting that way?
@@ -677,7 +685,7 @@ const GSVG = ['<path d="M6 1 L11 10 H1 Z"/>', '<circle cx="6" cy="6" r="4.6"/>',
   .map((d, g) => `<svg width="12" height="12" viewBox="0 0 12 12" fill="var(--g${g})" aria-hidden="true">${d}</svg>`);
 function flows(r) { // what this route actually carries, for the route panel
   return [...new Set(r.stops)].map(a => { const to = r.stops.filter((b, i) => b !== a && b.wants.includes(a.good) && r.stops.indexOf(b) === i).map(b => b.name);
-    const d = to.length ? null : r.stops.find(d => d.depot && d !== a && onward(d, a.good, r)); if (d) to.push(d.name + ' depot');
+    const d = r.stops.find(d => d.depot && d !== a && onward(d, a.good, r)); if (d) to.push('on via ' + d.name + ' depot');
     return to.length ? `<span class="flow">${GSVG[a.good]}${a.name} → ${to.join(', ')}</span>` : ''; }).join('');
 }
 function syncHud() {
@@ -882,22 +890,41 @@ function begin() { audioStart(); newGame(); logStart(); placing = false; sig = '
 $('start').addEventListener('click', begin); $('again').addEventListener('click', begin);
 try { const b = +localStorage.getItem('ol-best'); if (b) $('best').textContent = `Best run: ${b} delivered.`; } catch (e) {}
 
-/* ---------- leaderboard: only where the page is hosted with its scores API (api/scores); anywhere else it stays hidden ---------- */
-const LB = { on: false, top: [], posted: false };
+/* ---------- leaderboard. On the hosted site it talks to the scores API (api/scores). Opened as a Claude artifact it uses
+   the artifact's own database instead. Anywhere else (a file opened from disk) it stays hidden. ---------- */
+const LB = { mode: '', top: [], posted: false, note: '' };
+const lbClean = n => String(n).replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16).trim();
 function lbRender(rank) {
-  for (const [id, n] of [['lb-intro', 5], ['lb-over', 10]]) { const box = $(id), ol = box.querySelector('ol'); box.hidden = !LB.on || (id === 'lb-intro' && !LB.top.length); ol.textContent = '';
+  for (const [id, n] of [['lb-intro', 5], ['lb-over', 10]]) { const box = $(id), ol = box.querySelector('ol'); box.hidden = id === 'lb-intro' ? !LB.mode || !LB.top.length : !LB.mode && !LB.note; ol.textContent = '';
     LB.top.slice(0, n).forEach((e, i) => { const li = document.createElement('li'); if (rank === i + 1) li.className = 'me';
       for (const [cls, txt] of [['n', (i + 1) + '. ' + e.name], ['v', e.delivered + ' delivered · ' + fmtT(e.seconds)]]) { const sp = document.createElement('span'); sp.className = cls; sp.textContent = txt; li.appendChild(sp); }
       ol.appendChild(li); }); }
+  $('lb-form').hidden = !LB.mode; $('lb-note').hidden = !!LB.mode || !LB.note; $('lb-note').textContent = LB.note;
 }
-function lbLoad() { fetch('api/scores').then(r => r.ok ? r.json() : Promise.reject()).then(d => { if (!Array.isArray(d.top)) throw 0; LB.on = true; LB.top = d.top; lbRender(); }).catch(() => { LB.on = false; lbRender(); }); }
-function lbReset() { LB.posted = false; $('lb-post').disabled = false; $('lb-msg').textContent = ''; try { $('lb-name').value = localStorage.getItem('ol-name') || ''; } catch (e) {} lbRender(); }
+async function lbTopFromDb() { // the artifact's database: the best twenty runs, highest first
+  const snap = await LOG.db.collection('scores').orderBy('delivered', 'desc').limit(20).get();
+  return snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(e => typeof e.name === 'string' && e.delivered >= 0);
+}
+async function lbLoad() {
+  try { const r = await fetch('api/scores'), d = await r.json();
+    if (r.ok && Array.isArray(d.top)) { LB.mode = 'api'; LB.top = d.top; return lbRender(); }
+    if (r.status === 503 && d.error) { LB.note = d.error; return lbRender(); } // hosted, but no database is connected yet: say so instead of hiding
+  } catch (e) {}
+  try { if (!LOG.db && window.claude && window.claude.use) LOG.db = await window.claude.use('db');
+    if (LOG.db && LOG.db.collection) { LB.top = await lbTopFromDb(); LB.mode = 'db'; } } catch (e) {}
+  lbRender();
+}
+function lbReset() { LB.posted = false; $('lb-post').disabled = false; $('lb-msg').textContent = ''; try { $('lb-name').value = localStorage.getItem('ol-name') || ''; } catch (e) {} lbRender(); if (!LB.mode && !LB.note) lbLoad(); }
+async function lbPost(name) {
+  const run = { name, delivered: G.delivered, seconds: Math.round(G.t) };
+  if (LB.mode === 'api') { const r = await fetch('api/scores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(run) }), d = await r.json(); if (!r.ok) throw d; return d; }
+  const ref = await LOG.db.collection('scores').add(Object.assign(run, { at: Date.now() })), top = await lbTopFromDb(), k = top.findIndex(e => e.id === ref.id);
+  return { top, rank: k < 0 ? null : k + 1 };
+}
 $('lb-form').addEventListener('submit', e => {
-  e.preventDefault(); const name = $('lb-name').value.trim(), msg = $('lb-msg'); if (LB.posted || !G.over) return; if (!name) { msg.textContent = 'Enter a name first.'; return; }
+  e.preventDefault(); const name = lbClean($('lb-name').value), msg = $('lb-msg'); if (LB.posted || !G.over || !LB.mode) return; if (!name) { msg.textContent = 'Enter a name first.'; return; }
   LB.posted = true; $('lb-post').disabled = true; msg.textContent = 'Posting…'; try { localStorage.setItem('ol-name', name); } catch (err) {}
-  fetch('api/scores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, delivered: G.delivered, seconds: Math.round(G.t) }) })
-    .then(r => r.json().then(d => r.ok ? d : Promise.reject(d)))
-    .then(d => { LB.top = d.top || LB.top; lbRender(d.rank); msg.textContent = d.rank ? (d.rank <= 10 ? `Posted. You are number ${d.rank}.` : `Posted. You are number ${d.rank}; the board shows the top ten.`) : 'Posted.'; })
+  lbPost(name).then(d => { LB.top = d.top || LB.top; lbRender(d.rank); msg.textContent = d.rank ? (d.rank <= 10 ? `Posted. You are number ${d.rank}.` : `Posted. You are number ${d.rank}; the board shows the top ten.`) : 'Posted.'; })
     .catch(d => { LB.posted = false; $('lb-post').disabled = false; msg.textContent = (d && d.error) || 'The score could not be posted. Try again.'; });
 });
 lbLoad();

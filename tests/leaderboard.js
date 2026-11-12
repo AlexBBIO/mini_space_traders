@@ -52,6 +52,21 @@ const call = (method, body, ip) => new Promise(done => { const res = { code: 200
   const ui = await pg.evaluate(() => ({ msg: document.getElementById('lb-msg').textContent, me: document.querySelector('#lb-over li.me')?.textContent, rows: document.querySelectorAll('#lb-over li').length, disabled: document.getElementById('lb-post').disabled }));
   ok('the form posts and highlights the new row', /number 4/.test(ui.msg) && /Testy McTest/.test(ui.me || '') && ui.disabled);
   await pg.screenshot({ path: path.join(__dirname, 'leaderboard.png') });
+  // the same page as a Claude artifact: no scores API, so it uses the artifact's database (a stand-in here)
+  const pg2 = await br.newPage({ viewport: { width: 1200, height: 800 } }); pg2.on('pageerror', e => errs.push(e.message));
+  await pg2.route('**/api/scores', r => r.fulfill({ status: 404, body: 'not found' }));
+  await pg2.addInitScript(() => { const rows = [{ id: 'a', name: 'Ada', delivered: 300, seconds: 600 }, { id: 'b', name: 'Linus', delivered: 20, seconds: 90 }];
+    const q = { orderBy: () => q, limit: () => q, get: async () => ({ docs: rows.slice().sort((x, y) => y.delivered - x.delivered).map(r => ({ id: r.id, data: () => r })) }), add: async d => { const id = 'n' + rows.length; rows.push(Object.assign({ id }, d)); return { id }; } };
+    window.claude = { use: async n => n === 'db' ? { collection: () => q, doc: () => ({ set: async () => {} }) } : null }; });
+  await pg2.goto('http://localhost:' + srv.address().port + '/'); await pg2.waitForTimeout(600); await pg2.click('#start');
+  await pg2.evaluate(() => { __ol.manual = true; const o = __ol, G = o.G; for (let i = 0; i < 20 * 40; i++) o.step(0.05); const p = G.planets.find(q => q.wants.length); p.orders[p.wants[0]] = 9; p.over = .999; G.delivered = 60; for (let i = 0; i < 40 && !G.over; i++) o.step(0.05); });
+  await pg2.waitForSelector('#over:not([hidden])'); await pg2.fill('#lb-name', 'In Claude'); await pg2.click('#lb-post'); await pg2.waitForTimeout(500);
+  const ui2 = await pg2.evaluate(() => ({ msg: document.getElementById('lb-msg').textContent, me: document.querySelector('#lb-over li.me')?.textContent, rows: document.querySelectorAll('#lb-over li').length }));
+  ok('as an artifact it posts to the artifact database', /number 2/.test(ui2.msg) && /In Claude/.test(ui2.me || '') && ui2.rows === 3);
+  // hosted but with no database connected: the collapse screen says so
+  const pg3 = await br.newPage(); await pg3.route('**/api/scores', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'The leaderboard is not set up yet.' }) }));
+  await pg3.goto('http://localhost:' + srv.address().port + '/'); await pg3.waitForTimeout(400);
+  ok('with no database it shows a note, not a form', await pg3.evaluate(() => document.getElementById('lb-form').hidden && !document.getElementById('lb-note').hidden && /not set up/.test(document.getElementById('lb-note').textContent)));
   console.log(checks.join('\n')); console.log(JSON.stringify({ ui, errs }));
   await br.close(); srv.close(); process.exit(checks.some(c => c.startsWith('FAIL')) ? 1 : 0);
 })();

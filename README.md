@@ -50,6 +50,7 @@ After a run collapses, the player can enter a name and post the run. On the host
 | `index.html` | The playable page, built from `game.html`. |
 | `build.js` | Rebuilds `index.html` after editing `game.html`. |
 | `api/scores.js` | The leaderboard endpoint, run by Vercel as a serverless function. |
+| `api/runs.js` | The run-log endpoint. |
 | `tests/` | Playwright scripts used while developing. |
 
 After changing `game.html`:
@@ -73,9 +74,15 @@ The scripts in `tests/` need [Playwright](https://playwright.dev) (`npm i playwr
 | `tests/depot.js` | A depot world as a hub: one route in, another out to a buyer the first route never visits. |
 | `tests/leaderboard.js` | Checks the scores API rules against a stand-in store, then posts a score through the game's own form. |
 | `tests/shape.js` | Measures how clustered the network is as it grows (1 = a round blob, 3 or more = a line). |
+| `tests/stops.js` | Takes worlds off a route with a right-click and with the route panel's buttons. |
+| `tests/runs.js` | Checks the run-log API against a stand-in store, then plays a run that saves to it and copies its record. |
 
 The bot is a floor for difficulty, not a measure of how the game feels.
 
 ## Run logging
 
-When the game is opened as a Claude artifact it saves a record of each run (pacing snapshots, purchases, events and what the collapsing world was short of) to that artifact's own database. Opened anywhere else, including from this repository, nothing is logged.
+The game keeps a record of each run: pacing snapshots, purchases, events, each good's supply, demand and missing links, and what the collapsing world was short of. It holds nothing about the player.
+
+- Opened as a Claude artifact, the record is saved to that artifact's own database.
+- Hosted on Vercel, it is posted to `api/runs.js`, which keeps the last 60 runs for 30 days in the same Upstash database as the leaderboard. `GET /api/runs` lists them, `GET /api/runs?latest=1` returns the newest in full, and `GET /api/runs?id=...` returns one. Without a database nothing is kept.
+- Anywhere, **Copy run log** on the end screen copies the record as text.

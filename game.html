@@ -75,7 +75,9 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 #info b { color: var(--ink); }
 .flow { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .flows { display: flex; flex-wrap: wrap; gap: 3px 12px; justify-content: center; min-width: 0; }
-.panel .stops { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.panel .stops { color: var(--muted); min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.panel .stops button { border: 1px solid var(--line); background: none; border-radius: 8px; height: 26px; padding: 0 7px; color: var(--ink); font-weight: 500; white-space: nowrap; }
+.panel .stops button span { color: var(--danger); font-weight: 700; }
 .panel .note { color: var(--danger); font-weight: 600; }
 .stepper { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .stepper button, .panel .rm { border: 1px solid var(--line); background: none; border-radius: 8px; height: 28px; min-width: 28px; font-weight: 700; }
@@ -91,6 +93,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .card li svg { margin-top: 3px; }
 .go { align-self: flex-start; background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 11px 22px; font-weight: 700; font-size: 15px; }
 .best { color: var(--muted); font-size: 13px; }
+.link { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; font-size: 13px; }
 .lb { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
 .lb small, .lb label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .lb ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-variant-numeric: tabular-nums; }
@@ -200,6 +203,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
       </div>
       <button class="go" id="again">New run</button>
       <span class="best" id="o-best"></span>
+      <span class="best"><button class="link" id="copy-log" type="button">Copy run log</button> <span id="copy-msg" aria-live="polite"></span></span>
     </div>
   </div>
 </div>
@@ -254,7 +258,7 @@ function makeGalaxy() { // every world in the galaxy exists from the start, scat
     G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, size, slots, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
       over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
   for (let i = 0; i < 4; i++) activate(G.dormant[0]); // the player starts with the home world and its three nearest neighbours
-  G.next = nextWorld();
+  setNext();
 }
 function activate(p) { // a dormant world joins the network: its output adds matching demand to the ledger
   G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(.3, .8); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
@@ -263,6 +267,7 @@ function nextWorld() { // the dormant world nearest the middle of the network wa
   const n = G.planets.length, cx = G.planets.reduce((s, p) => s + p.x, 0) / n, cy = G.planets.reduce((s, p) => s + p.y, 0) / n;
   let best = null, bd = Infinity; for (const d of G.dormant) { const m = Math.hypot(d.x - cx, d.y - cy); if (m < bd) { bd = m; best = d; } } return best;
 }
+function setNext() { G.next = G.planets.length < MAXP ? nextWorld() : null; }
 function place(p) { p.x = Math.cos(p.ang) * p.r; p.y = Math.sin(p.ang) * p.r; }
 function nameIt() {
   for (;;) { let n = pick(SYL) + pick(SYL); if (Math.random() < .3) n += pick(SYL);
@@ -274,7 +279,8 @@ const importers = g => G.planets.filter(p => p.wants.includes(g)).length;
    to worlds that do not sell that good. So for every good, total demand stays at RHO of total supply, give or take what is
    still waiting in the ledger for a world with room. */
 const demandOf = p => p.wants.reduce((n, g) => n + p.rate[g], 0), load = p => demandOf(p) / APPETITE[p.size]; // how much a world wants, relative to its size
-const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || p.wants.length < p.slots);
+const sellersOf = g => G.planets.filter(p => p.good === g).length;
+const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || (p.wants.length < p.slots && importers(g) < 2 * sellersOf(g) + 1)); // a good gains a new buyer only while it has under about two per seller, so demand is not spread thinner than its sellers can reach
 function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
 function giveDemand(p, g, amt) { if (!p.wants.includes(g)) addWant(p, g); p.rate[g] += amt; }
 function takeDemand(p, g, amt) { p.rate[g] -= amt; if (p.rate[g] < .04) { dropWant(p, g); p.wants.splice(p.wants.indexOf(g), 1); } }
@@ -297,7 +303,7 @@ function balanceDemand() {
   }
   for (const p of G.planets) for (let guard = 0; guard < 4 && p.wants.length < p.slots; guard++) { // 3. texture: a world with a free slot takes a share of another good from that good's
     let best = null; // biggest buyer, and hands back the same amount of one of its own goods where it can, so nobody's total changes
-    for (const d of G.planets) if (d !== p) for (const g of d.wants) if (g !== p.good && !p.wants.includes(g) && d.rate[g] >= .3 && (!best || d.rate[g] > best.d.rate[best.g])) best = { d, g };
+    for (const d of G.planets) if (d !== p) for (const g of d.wants) if (!p.wants.includes(g) && canBuy(p, g) && d.rate[g] >= .3 && (!best || d.rate[g] > best.d.rate[best.g])) best = { d, g };
     if (!best) break; const { d, g } = best, amt = Math.min(.2, d.rate[g] / 2), h = p.wants.filter(h => canBuy(d, h) && p.rate[h] > amt + .1).sort((a, b) => p.rate[b] - p.rate[a])[0];
     takeDemand(d, g, amt); giveDemand(p, g, amt); if (h != null) { takeDemand(p, h, amt); giveDemand(d, h, amt); }
   }
@@ -318,9 +324,9 @@ const relays = (r, g, at) => r.stops.some(e => e.depot && e !== at && onward(e, 
 const trades = r => r.stops.some(a => buysOn(r, a.good, a) || relays(r, a.good, a))
   || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d)) && GOODS.some((_, g) => g < G.active && (buysOn(r, g, d) || relays(r, g, d))));
 function awaken() {
-  const p = G.dormant.includes(G.next) ? G.next : nextWorld(); if (!p) return; activate(p); // the one the map has been pointing at
+  if (!G.dormant.includes(G.next)) setNext(); const p = G.next; if (!p) return; activate(p); // the one the map has been pointing at
   balanceDemand(); // the newcomer's output finds buyers, and it takes on a share of the network's demand
-  G.next = G.planets.length < MAXP ? nextWorld() : null;
+  setNext();
   sfx('join'); logEvent('joined: ' + SIZE_NAME[p.size] + ' ' + GOODS[p.good], p.name);
   toast(`${p.name} joins the network: a ${SIZE_NAME[p.size]} world selling ${GOODS[p.good]}.`);
 }
@@ -341,7 +347,7 @@ function step(dt) {
   for (const p of G.planets) { p.ang += p.w * dt; place(p); }
   for (const p of G.dormant) { p.ang += p.w * dt; place(p); }
   for (const d of G.dust) d.ang += d.w * dt;
-  G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 1; G.next = G.planets.length < MAXP ? nextWorld() : null; }
+  G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 1; setNext(); }
   for (const d of G.planets) if (d.depot) { d.purgeT -= dt; // goods no route can sell any more slowly spoil
     if (d.purgeT <= 0) { d.purgeT = 4; const i = d.items.findIndex(g => !onward(d, g, null)); if (i >= 0) d.items.splice(i, 1); } }
   if (G.t >= G.nextPlanetT && G.planets.length < MAXP && G.dormant.length) { awaken(); G.nextPlanetT = G.t + 70 + G.planets.length * 2; }
@@ -382,7 +388,7 @@ function bend(a, b, side) { // control point of the lane between two worlds, bow
 const laneLen = (a, b, c) => (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.cx - a.x, c.cy - a.y) + Math.hypot(b.x - c.cx, b.y - c.cy)) / 2;
 function stepShip(s, dt) {
   if (s.state === 'dock') { s.x = s.at.x + s.ox; s.y = s.at.y + s.oy; s.dockT -= dt; if (s.dockT <= 0) dockAction(s); return; }
-  const a = s.route.stops[s.prev], b = s.route.stops[s.idx], c = bend(a, b, s.side), len = laneLen(a, b, c) || 1;
+  const a = s.from || s.route.stops[s.prev], b = s.route.stops[s.idx], c = bend(a, b, s.side), len = laneLen(a, b, c) || 1;
   const e = Math.min(.45, DOCK_R / len), run = len * (1 - 2 * e); // it flies from just off one world to just off the next
   s.tau = Math.min(1, s.tau + dt / (2 * Math.sqrt(run / G.accel))); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
   const kk = s.tau < .5 ? 2 * s.tau * s.tau : 1 - 2 * (1 - s.tau) ** 2, t = e + (1 - 2 * e) * kk, u = 1 - t;
@@ -391,7 +397,7 @@ function stepShip(s, dt) {
   // attitude: nose along the lane while speeding up, then it flips and flies tail-first to brake. The drive only lights once the ship is lined up
   const want = Math.atan2(s.hy, s.hx) + (s.tau >= .5 ? Math.PI : 0), da = ((((want - s.face + Math.PI) % 6.2832) + 6.2832) % 6.2832) - Math.PI, turn = 2.6 * dt;
   s.face += Math.abs(da) <= turn ? da : Math.sign(da) * turn; s.burn = Math.abs(da) < .3 && s.tau < .985 ? 1 : 0;
-  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; }
+  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; s.from = null; }
 }
 /* How a freighter decides what to do at a stop. Every unit it loads is tied to one specific open order (or to a depot that
    will pass it on), so two freighters never load for the same order, and it only loads for stops ahead of it. */
@@ -497,10 +503,23 @@ function extendRoute(r, add, atStart) {
   if (atStart) { r.stops.unshift(...add.slice().reverse()); for (const s of shipsOn(r)) { s.idx += add.length; s.prev += add.length; } }
   else r.stops.push(...add);
 }
+function removeStop(r, p) { // take one world off a route; freighters at it or bound for it carry on to the next stop that is left
+  const k = r.stops.indexOf(p); if (k < 0) return false;
+  if (r.stops.length <= 2) { toast('A route needs two worlds. Remove the route to close it.'); return false; }
+  r.stops.splice(k, 1);
+  for (const s of shipsOn(r)) {
+    for (const c of s.cargo) if (c.to === p) { release(c); c.to = null; c.relay = false; } // units bound for it look for another buyer at the next stop
+    if (!(s.state === 'dock' ? s.at === p : s.prev === k || s.idx === k)) { if (s.idx > k) s.idx--; if (s.prev > k) s.prev--; continue; }
+    let j = s.state === 'fly' && s.idx !== k ? s.idx - (s.idx > k) : s.dir > 0 ? k : k - 1; // keep its heading if that stop is still on the route, else the next one along
+    j = Math.max(0, Math.min(r.stops.length - 1, j));
+    s.from = { id: 0, x: s.x, y: s.y }; s.idx = s.prev = j; s.state = 'fly'; s.at = null; s.tau = 0; s.side = bend(s.from, r.stops[j]).sgn; // it flies there from wherever it is
+  }
+  sfx('route'); if (LOG.run && !manual) LOG.run.stopsRemoved++; return true;
+}
 function endGame() {
   let best = 0; try { best = +localStorage.getItem('ol-best') || 0; } catch (e) {}
   const isBest = G.delivered > best; if (isBest) try { localStorage.setItem('ol-best', G.delivered); } catch (e) {}
-  sfx('over'); logEnd(); lbReset();
+  sfx('over'); logEnd(); lbReset(); $('copy-msg').textContent = '';
   $('o-title').textContent = `Trade collapsed at ${G.over.name}`;
   $('o-text').textContent = `Its orders for ${G.over.wants.filter(g => ordersOf(G.over, g)).map(g => GOODS[g]).join(' and ')} went unfilled for too long.`;
   $('o-time').textContent = fmtT(G.t); $('o-del').textContent = G.delivered; $('o-earn').textContent = '◈' + G.earned;
@@ -699,14 +718,15 @@ function syncHud() {
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
   hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
   $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${GOODS[hoverD.good]} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${GOODS[hp.good]} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + GOODS[g]).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}` : '';
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${GOODS[hoverD.good]} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${GOODS[hp.good]} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + GOODS[g]).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
-  const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
+  const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
   if (s === sig) return; sig = s;
   let h = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
     return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') : 'no ship'}</button>`; }).join('');
   if (G.sel) { const r = G.sel, n = shipsOn(r).length;
-    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? `<span class="flows">${flows(r)}</span>` : `<span class="stops">${r.stops.map(p => p.name).join(' → ')}</span><span class="note">No stop buys what another sells</span>`}
+    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? `<span class="flows">${flows(r)}</span>` : `<span class="note">No stop buys what another sells</span>`}
+      <span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
       <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
       <button class="rm" data-act="remove">Remove route</button></div>`; }
   $('routes').innerHTML = h;
@@ -714,6 +734,7 @@ function syncHud() {
 $('routes').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.r) { const r = G.routes.find(r => r.id === +b.dataset.r); G.sel = G.sel === r ? null : r; }
+  else if (b.dataset.stop) { const p = G.sel && G.sel.stops.find(p => p.id === +b.dataset.stop); if (p) removeStop(G.sel, p); }
   else if (G.sel) { const a = b.dataset.act; if (a === 'plus') addShip(G.sel); else if (a === 'minus') removeShip(G.sel); else if (a === 'remove') removeRoute(G.sel); }
 });
 for (const k of ['ship', 'lic', 'hold', 'eng']) $('buy-' + k).addEventListener('click', () => { if (buy(k) && k === 'ship' && G.sel) addShip(G.sel); });
@@ -741,10 +762,10 @@ function routeAt(x, y) {
   return best;
 }
 const pos = e => { const b = cv.getBoundingClientRect(); mouse.x = e.clientX - b.left; mouse.y = e.clientY - b.top; };
-const ptrs = new Map(); let pan = null, pinch = null;
+const ptrs = new Map(); let pan = null, pinch = null, lastPtr = '';
 const gap = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
 cv.addEventListener('pointerdown', e => {
-  if (!started || G.over) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
+  lastPtr = e.pointerType; if (!started || G.over || e.button === 2) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
   if (ptrs.size === 2) { drag = null; pan = null; pinch = gap(); return; }
   if (placing) { const q = planetAt(mouse.x, mouse.y); if (q) buildDepot(q); return; }
   const p = planetAt(mouse.x, mouse.y);
@@ -773,6 +794,8 @@ function pointerEnd(e, cancel) {
   if (pan) { if (pan.moved <= 5 && !cancel) G.sel = null; pan = null; return; }
   if (cancel) drag = null; else drop();
 }
+cv.addEventListener('contextmenu', e => { e.preventDefault(); if (!started || G.over || lastPtr === 'touch') return; // right-click a world on the selected route to take it off (a long press on a touch screen does nothing: use the route panel)
+  pos(e); drag = null; const p = planetAt(mouse.x, mouse.y); if (p && G.sel && G.sel.stops.includes(p)) removeStop(G.sel, p); });
 cv.addEventListener('pointerup', e => pointerEnd(e, false)); cv.addEventListener('pointercancel', e => pointerEnd(e, true));
 cv.addEventListener('pointerleave', () => { if (!drag) hover = null; hoverD = null; });
 cv.addEventListener('wheel', e => { if (!started) return; e.preventDefault(); pos(e); zoomAt(mouse.x, mouse.y, Math.exp(-e.deltaY * (e.ctrlKey ? .012 : .0016))); }, { passive: false });
@@ -850,24 +873,32 @@ document.addEventListener('visibilitychange', () => { if (A.ctx) { if (document.
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { if (A.ctx && A.ctx.state !== 'running') A.ctx.resume().catch(() => {}); }, true); // any input wakes paused audio
 audioPrefs();
 
-/* ---------- run log: each run's pacing is saved to this page's own database, so difficulty can be tuned from real play ---------- */
-const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30 };
+/* ---------- run log: each run's pacing is saved so difficulty can be tuned from real play: to this page's own database inside Claude, to the site's api/runs when hosted.
+   The end screen can also copy the record, which works anywhere ---------- */
+const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, api: /^https?:$/.test(location.protocol) && !(window.claude && window.claude.use) };
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 21, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 22, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
+const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
+  || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d) && r2.stops.some(z => z.good === g)))));
 function logSample() {
   const tot = G.planets.map(totalOrders);
   LOG.run.timeline.push({ t: Math.round(G.t), worlds: G.planets.length, routes: G.routes.length, routesIdle: G.routes.filter(r => !shipsOn(r).length || !trades(r)).length, freighters: G.ships.length, reserve: G.reserve,
     credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
-    worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1) });
+    worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1),
+    goods: GOODS.map((name, g) => { const sellers = G.planets.filter(p => p.good === g), buyers = G.planets.filter(p => p.wants.includes(g)); if (!sellers.length && !buyers.length) return null; // per good: is it short because of supply, or because nothing links buyer to seller?
+      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + OUT[p.size], 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0),
+        ordersWaiting: buyers.reduce((n, p) => n + ordersOf(p, g), 0), buyersWithNoRouteToASeller: buyers.filter(p => !fedBy(p, g)).length }; }).filter(Boolean) });
 }
 function logSave() {
-  const r = LOG.run; if (!LOG.db || !r || manual) return; if (LOG.busy) { LOG.dirty = true; return; } LOG.busy = true;
+  const r = LOG.run; if (!(LOG.db || LOG.api) || !r || manual) return; if (LOG.busy) { LOG.dirty = true; return; } LOG.busy = true;
   r.seconds = Math.round(G.t); r.delivered = G.delivered; r.earned = G.earned; r.music = A.music; r.soundEffects = A.sfx; r.saved = new Date().toISOString();
-  LOG.db.doc('runs/' + LOG.id).set(JSON.parse(JSON.stringify(r))).catch(() => {}).then(() => { LOG.busy = false; if (LOG.dirty) { LOG.dirty = false; logSave(); } });
+  const sent = LOG.db ? LOG.db.doc('runs/' + LOG.id).set(JSON.parse(JSON.stringify(r)))
+    : fetch('api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: LOG.id, run: r }), keepalive: true }).then(a => { if (a.status === 404 || a.status === 503) LOG.api = false; }); // no log store on this site: stop trying
+  sent.catch(() => {}).then(() => { LOG.busy = false; if (LOG.dirty) { LOG.dirty = false; logSave(); } });
 }
 function logTick(dt) { // called every frame of a live run
   const r = LOG.run; if (!r || r.ended || manual) return; r.realSecondsAtSpeed[speed ? 'x' + speed : 'paused'] += dt;
@@ -881,6 +912,11 @@ function logEnd() { // what the collapsing world was short of, and whether route
       crunchAtSeller: !!(G.crunch && sellers.includes(G.crunch.p)), surgeHere: !!(G.rush && G.rush.p === p && G.rush.g === g) }; }) };
   logSample(); logSave();
 }
+async function logCopy() { // the run record as text, to paste wherever it is wanted
+  const r = LOG.run, msg = $('copy-msg'); if (!r) return; const text = JSON.stringify(r); let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { const t = document.createElement('textarea'); t.value = text; t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); try { ok = document.execCommand('copy'); } catch (e2) {} t.remove(); }
+  msg.textContent = ok ? 'Copied.' : 'Could not copy from this page.';
+}
 const logEvent = (kind, world) => { if (LOG.run && !manual) LOG.run.events.push({ t: Math.round(G.t), kind, world }); };
 
 let last = performance.now(), manual = false;
@@ -890,7 +926,7 @@ function frame(now) {
   aimCamera(false); render(); syncHud(); requestAnimationFrame(frame);
 }
 function begin() { audioStart(); newGame(); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; setSpeed(1); aimCamera(true); }
-$('start').addEventListener('click', begin); $('again').addEventListener('click', begin);
+$('start').addEventListener('click', begin); $('again').addEventListener('click', begin); $('copy-log').addEventListener('click', logCopy);
 try { const b = +localStorage.getItem('ol-best'); if (b) $('best').textContent = `Best run: ${b} delivered.`; } catch (e) {}
 
 /* ---------- leaderboard. On the hosted site it talks to the scores API (api/scores). Opened as a Claude artifact it uses
@@ -936,6 +972,6 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 newGame(); resize(); aimCamera(true); requestAnimationFrame(frame);
-window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
+window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
 })();
 </script>

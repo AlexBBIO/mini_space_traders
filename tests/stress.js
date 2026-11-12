@@ -16,6 +16,7 @@ const path = require('path');
         if (G.routes.length < 7) { o.buy('lic'); const st = [...G.planets].sort(() => Math.random() - .5).slice(0, 2 + Math.floor(Math.random() * 3)); o.createRoute(st); }
         if (G.reserve < 1) o.buy('ship'); if (G.routes.length) o.addShip(rndPick(G.routes));
         if (Math.random() < .25 && G.routes.length > 3) o.removeRoute(rndPick(G.routes));
+        if (Math.random() < .5 && G.routes.length) { const r = rndPick(G.routes); o.removeStop(r, rndPick(r.stops)); }
         if (Math.random() < .2 && G.routes.length) o.removeShip(rndPick(G.routes));
         if (Math.random() < .2) { G.credits += 500; o.buildDepot(rndPick(G.planets)); }
       }

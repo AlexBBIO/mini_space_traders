@@ -59,8 +59,11 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 #hint { position: absolute; left: 50%; transform: translateX(-50%); top: 76px; width: max-content; max-width: calc(100% - 32px);
   text-align: center; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font-weight: 600; pointer-events: none; }
 #toasts { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 64px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; max-width: min(320px, calc(100% - 32px)); }
+button.toast { pointer-events: auto; text-align: left; font-family: inherit; color: inherit; cursor: pointer; }
+button.toast:hover { border-color: var(--ink); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; font-size: 13px; animation: tin .25s ease-out; }
 .toast.warn { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.gd { font-weight: 700; }
 @keyframes tin { from { opacity: 0; transform: translateY(-6px); } }
 
 .dock { bottom: 0; padding-block: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -222,6 +225,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
+const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
 const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
@@ -289,7 +293,7 @@ const importers = g => G.planets.filter(p => p.wants.includes(g)).length;
 const demandOf = p => p.wants.reduce((n, g) => n + p.rate[g], 0), load = p => demandOf(p) / APPETITE[p.size]; // how much a world wants, relative to its size
 const sellersOf = g => G.planets.filter(p => p.good === g).length;
 const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || (p.wants.length < p.slots && importers(g) < 2 * sellersOf(g) + 1)); // a good gains a new buyer only while it has under about two per seller, so demand is not spread thinner than its sellers can reach
-function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
+function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ', g, t: -1.5 }); }
 function giveDemand(p, g, amt) { if (!p.wants.includes(g)) addWant(p, g); p.rate[g] += amt; }
 function takeDemand(p, g, amt) { p.rate[g] -= amt; if (p.rate[g] < .04) { dropWant(p, g); p.wants.splice(p.wants.indexOf(g), 1); } }
 function balanceDemand() {
@@ -336,7 +340,7 @@ function awaken() {
   balanceDemand(); // the newcomer's output finds buyers, and it takes on a share of the network's demand
   setNext();
   sfx('join'); logEvent('joined: ' + SIZE_NAME[p.size] + ' ' + GOODS[p.good], p.name);
-  toast(`${p.name} joins the network: a ${SIZE_NAME[p.size]} world selling ${GOODS[p.good]}.`);
+  toast(`${p.name} joins the network: a ${SIZE_NAME[p.size]} world selling ${gn(p.good)}.`, false, p);
 }
 function onwardOpen(d, g, from, seen) { // open orders for g that goods left at depot d could go on to fill: at the stops of the other routes through d, and beyond any depots on those
   seen = seen || new Set(from ? from.stops : []); seen.add(d); let n = 0;
@@ -364,8 +368,8 @@ function step(dt) {
   if (!G.rush && !G.crunch && G.t >= G.nextRushT) { // events knock a balanced network off balance for a while
     const c = G.planets.filter(p => G.t - p.born > 20 && p.wants.length);
     if (c.length) { const p = pick(c);
-      if (Math.random() < .5) { const g = pick(p.wants); G.rush = { p, g, until: G.t + 30 }; logEvent('surge: ' + GOODS[g], p.name); toast(`Demand surge at ${p.name}: it wants ${GOODS[g]} much faster for a while, and pays double.`); }
-      else { G.crunch = { p, until: G.t + 35 }; logEvent('crunch: ' + GOODS[p.good], p.name); toast(`Supply crunch at ${p.name}: its ${GOODS[p.good]} output has dropped for a while.`, true); }
+      if (Math.random() < .5) { const g = pick(p.wants); G.rush = { p, g, until: G.t + 30 }; logEvent('surge: ' + GOODS[g], p.name); toast(`Demand surge at ${p.name}: it wants ${gn(g)} much faster for a while, and pays double.`, false, p); }
+      else { G.crunch = { p, until: G.t + 35 }; logEvent('crunch: ' + GOODS[p.good], p.name); toast(`Supply crunch at ${p.name}: its ${gn(p.good)} output has dropped for a while.`, true, p); }
       sfx('event'); }
     G.nextRushT = G.t + rnd(55, 80);
   }
@@ -380,7 +384,7 @@ function step(dt) {
     p.accS = Math.min(1, p.accS + OUT[p.size] * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
     if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS && p.stock < reach(p)) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2); } }
   for (const p of G.planets) {
-    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`Orders are piling up at ${p.name}.`, true); sfx('warn'); } }
+    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`Orders are piling up at ${p.name}.`, true, p); sfx('warn'); } }
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
@@ -487,9 +491,9 @@ function createRoute(stops) {
 }
 function buildDepot(p) {
   const c = cost('depot'); if (G.credits < c) { placing = false; return false; }
-  if (p.depot) { toast(`${p.name} already has a depot.`); return false; }
+  if (p.depot) { toast(`${p.name} already has a depot.`, false, p); return false; }
   G.credits -= c; G.bought.depot++; placing = false; p.depot = true; p.items = []; sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: 'depot', world: p.name });
-  if (G.bought.depot === 1) toast(`Depot built at ${p.name}. A route can leave goods there for another route to carry on.`);
+  if (G.bought.depot === 1) toast(`Depot built at ${p.name}. A route can leave goods there for another route to carry on.`, false, p);
   return true;
 }
 const shipsOn = r => G.ships.filter(s => s.route === r);
@@ -511,6 +515,13 @@ function extendRoute(r, add, atStart) {
   if (atStart) { r.stops.unshift(...add.slice().reverse()); for (const s of shipsOn(r)) { s.idx += add.length; s.prev += add.length; } }
   else r.stops.push(...add);
 }
+function insertStop(r, k, p) { // put a world into a route between stops k and k + 1; freighters on that leg divert to it
+  if (k < 0 || k >= r.stops.length - 1 || r.stops.includes(p)) return false;
+  if (r.stops.length >= MAX_STOPS) { toast(`A route can have ${MAX_STOPS} stops at most.`); return false; }
+  for (const s of shipsOn(r)) { const onLeg = s.state === 'fly' && s.prev !== s.idx && Math.min(s.prev, s.idx) === k;
+    if (onLeg) { s.from = { id: 0, x: s.x, y: s.y }; s.idx = s.prev = k + 1; s.tau = 0; s.side = bend(s.from, p).sgn; } else { if (s.idx > k) s.idx++; if (s.prev > k) s.prev++; } }
+  r.stops.splice(k + 1, 0, p); sfx('route'); return true;
+}
 function removeStop(r, p) { // take one world off a route; freighters at it or bound for it carry on to the next stop that is left
   const k = r.stops.indexOf(p); if (k < 0) return false;
   if (r.stops.length <= 2) { toast('A route needs two worlds. Remove the route to close it.'); return false; }
@@ -529,13 +540,17 @@ function endGame() {
   const isBest = G.delivered > best; if (isBest) try { localStorage.setItem('ol-best', G.delivered); } catch (e) {}
   sfx('over'); logEnd(); lbReset(); $('copy-msg').textContent = '';
   $('o-title').textContent = `Trade collapsed at ${G.over.name}`;
-  $('o-text').textContent = `Its orders for ${G.over.wants.filter(g => ordersOf(G.over, g)).map(g => GOODS[g]).join(' and ')} went unfilled for too long.`;
+  $('o-text').innerHTML = `Its orders for ${G.over.wants.filter(g => ordersOf(G.over, g)).map(gn).join(' and ')} went unfilled for too long.`;
   $('o-time').textContent = fmtT(G.t); $('o-del').textContent = G.delivered; $('o-earn').textContent = '◈' + G.earned;
   $('o-best').textContent = isBest ? 'New best run.' : `Best run: ${best} delivered.`;
   setTimeout(() => { $('over').hidden = false; $('again').focus(); }, 900);
 }
-function toast(msg, warn) {
-  if (!started) return; const el = document.createElement('div'); el.className = 'toast' + (warn ? ' warn' : ''); el.textContent = msg;
+let ping = null; // the world a clicked notification is pointing out, ringed for a few seconds
+function showWorld(p) { if (!G.planets.includes(p)) return; ping = { p, at: performance.now() };
+  const x = sx(p.x), y = sy(p.y); if (cam.manual && (x < 40 || x > viewRight - 40 || y < viewTop + 40 || y > viewBot - 40)) { cam.cx += viewRight / 2 - x; cam.cy += (viewTop + viewBot) / 2 - y; } } // bring it into view if the player has panned away
+function toast(msg, warn, world) { // world: the one the message is about; clicking the message points it out
+  if (!started) return; const el = document.createElement(world ? 'button' : 'div'); el.className = 'toast' + (warn ? ' warn' : ''); el.innerHTML = msg; // only ever the game's own text and generated world names
+  if (world) { el.type = 'button'; el.title = 'Show ' + world.name; el.addEventListener('click', () => showWorld(world)); }
   $('toasts').appendChild(el); while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
   setTimeout(() => el.remove(), 5200);
 }
@@ -634,6 +649,8 @@ function render() {
     ctx.fillStyle = sel ? C.ink : C.bg; ctx.globalAlpha = 1; const B = Math.max(.8, U); ctx.beginPath(); ctx.arc(mx, my, 7.5 * B, 0, 6.2832); ctx.fill(); ctx.lineWidth = 1.5; ctx.stroke();
     ctx.fillStyle = sel ? C.bg : C.ink; ctx.font = `700 ${10 * B}px Figtree, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(r.n, mx, my + .5);
   }
+  if (pull2 && pull2.moved && G.routes.includes(pull2.r) && pull2.k < pull2.r.stops.length - 1) { const a = pull2.r.stops[pull2.k], b = pull2.r.stops[pull2.k + 1], ok = pullOk(hover), mx = ok ? sx(hover.x) : mouse.x, my = ok ? sy(hover.y) : mouse.y;
+    ctx.strokeStyle = pull2.r.stops.length >= MAX_STOPS ? C.danger : C.ink; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(sx(a.x), sy(a.y)); ctx.lineTo(mx, my); ctx.lineTo(sx(b.x), sy(b.y)); ctx.stroke(); ctx.setLineDash([]); }
   if (drag) { const bad = !drag.ext && G.licences <= 0;
     ctx.strokeStyle = bad ? C.danger : C.ink; ctx.lineWidth = 2.5; ctx.setLineDash([6, 6]); ctx.beginPath();
     drag.stops.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](sx(p.x), sy(p.y))); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); ctx.setLineDash([]); }
@@ -668,6 +685,8 @@ function render() {
     ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(x, y, R + 2.5, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.bg; glyph(p.good, x, y, R * .42);
+    if (ping && ping.p === p) { const age = (performance.now() - ping.at) / 1000; if (age > 4) ping = null; else { ctx.strokeStyle = C.ink; // rings spreading out from the world a notification pointed at
+      for (let i = 0; i < 2; i++) { const ph = (age * .9 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * Math.min(1, 4 - age); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, R + 6 + ph * 34 * Math.max(.75, U), 0, 6.2832); ctx.stroke(); } ctx.globalAlpha = 1; } }
     if (G.sel && G.sel.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     if (p === hover || (drag && drag.stops.includes(p))) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     for (const q of drag ? drag.stops : hover ? [hover] : []) if (q !== p && p.wants.includes(q.good)) { ctx.strokeStyle = C.g[q.good]; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, P + 17, 0, 6.2832); ctx.stroke(); }
@@ -705,7 +724,10 @@ function render() {
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 21, ey + Math.sin(a) * 21); ctx.lineTo(ex + Math.cos(a + .5) * 15, ey + Math.sin(a + .5) * 15); ctx.lineTo(ex + Math.cos(a - .5) * 15, ey + Math.sin(a - .5) * 15); ctx.fill();
   }
   for (const f of G.floats) { ctx.globalAlpha = 1 - Math.max(0, f.t); ctx.fillStyle = C.ink; ctx.font = '700 12px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center';
-    const fx = sx(f.p.x) + (pr + 18) * U, fy = sy(f.p.y) - (pr + 6) * U - Math.max(0, f.t) * 18; ctx.lineJoin = 'round'; ctx.strokeStyle = C.bg; ctx.lineWidth = 4; ctx.strokeText(f.text, fx, fy); ctx.fillText(f.text, fx, fy); } ctx.globalAlpha = 1;
+    const fx = sx(f.p.x) + (pr + 18) * U, fy = sy(f.p.y) - (pr + 6) * U - Math.max(0, f.t) * 18; ctx.lineJoin = 'round'; ctx.strokeStyle = C.bg; ctx.lineWidth = 4;
+    if (f.g == null) { ctx.strokeText(f.text, fx, fy); ctx.fillText(f.text, fx, fy); }
+    else { const w1 = ctx.measureText(f.text).width, w2 = ctx.measureText(GOODS[f.g]).width, x0 = fx - (w1 + w2) / 2; ctx.textAlign = 'left'; // "now buys" in ink, the good in its colour
+      ctx.strokeText(f.text, x0, fy); ctx.fillText(f.text, x0, fy); ctx.strokeText(GOODS[f.g], x0 + w1, fy); ctx.fillStyle = C.g[f.g]; ctx.fillText(GOODS[f.g], x0 + w1, fy); } } ctx.globalAlpha = 1;
 }
 
 /* ---------- HUD ---------- */
@@ -726,7 +748,7 @@ function syncHud() {
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
   hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
   $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${GOODS[hoverD.good]} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${GOODS[hp.good]} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + GOODS[g]).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${gn(hoverD.good)} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${gn(hp.good)} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + gn(g)).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
   const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
   if (s === sig) return; sig = s;
@@ -763,25 +785,29 @@ addEventListener('keydown', e => {
 function planetAt(x, y) { let best = null, bd = pr * U + 11; for (const p of G.planets) { const d = Math.hypot(sx(p.x) - x, sy(p.y) - y); if (d < bd) { bd = d; best = p; } } return best; }
 function dormantAt(x, y) { let best = null, bd = 14; for (const p of G.dormant) { const d = Math.hypot(sx(p.x) - x, sy(p.y) - y); if (d < bd) { bd = d; best = p; } } return best; }
 function routeAt(x, y) {
+  const l = laneAt(x, y); return l ? l.r : null;
+}
+function laneAt(x, y) { // the route leg under the pointer
   let best = null, bd = 12;
   for (const r of G.routes) for (let k = 0; k < r.stops.length - 1; k++) { const s = segPts(r, k);
     for (let i = 0; i <= 14; i++) { const t = i / 14, u = 1 - t, d = Math.hypot(u * u * s.ax + 2 * u * t * s.cx + t * t * s.bx - x, u * u * s.ay + 2 * u * t * s.cy + t * t * s.by - y);
-      if (d < bd) { bd = d; best = r; } } }
+      if (d < bd) { bd = d; best = { r, k }; } } }
   return best;
 }
 const pos = e => { const b = cv.getBoundingClientRect(); mouse.x = e.clientX - b.left; mouse.y = e.clientY - b.top; };
-const ptrs = new Map(); let pan = null, pinch = null, lastPtr = '';
+const ptrs = new Map(); let pan = null, pinch = null, lastPtr = '', pull2 = null; // pull2: a lane being dragged out to a world, to add it as a stop
+const pullOk = p => pull2 && p && G.routes.includes(pull2.r) && !pull2.r.stops.includes(p) && pull2.r.stops.length < MAX_STOPS;
 const gap = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
 cv.addEventListener('pointerdown', e => {
   lastPtr = e.pointerType; if (!started || G.over || e.button === 2) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
-  if (ptrs.size === 2) { drag = null; pan = null; pinch = gap(); return; }
+  if (ptrs.size === 2) { drag = null; pan = null; pull2 = null; pinch = gap(); return; }
   if (placing) { const q = planetAt(mouse.x, mouse.y); if (q) buildDepot(q); return; }
   const p = planetAt(mouse.x, mouse.y);
   if (p) { cv.setPointerCapture(e.pointerId); const r = G.sel; let ext = null, atStart = false;
     if (r && r.stops.length < MAX_STOPS) { if (r.stops[r.stops.length - 1] === p) ext = r; else if (r.stops[0] === p) { ext = r; atStart = true; } }
     drag = { stops: [p], ext, atStart }; return; }
-  const r = routeAt(mouse.x, mouse.y);
-  if (r) G.sel = r; else { pan = { x: mouse.x, y: mouse.y, moved: 0 }; cv.setPointerCapture(e.pointerId); }
+  const l = laneAt(mouse.x, mouse.y);
+  if (l) { G.sel = l.r; pull2 = { r: l.r, k: l.k, x: mouse.x, y: mouse.y, moved: false }; cv.setPointerCapture(e.pointerId); } else { pan = { x: mouse.x, y: mouse.y, moved: 0 }; cv.setPointerCapture(e.pointerId); }
 });
 cv.addEventListener('pointermove', e => {
   pos(e); if (!started) return; if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
@@ -789,6 +815,7 @@ cv.addEventListener('pointermove', e => {
   if (pan) { const dx = mouse.x - pan.x, dy = mouse.y - pan.y; pan.moved += Math.abs(dx) + Math.abs(dy); pan.x = mouse.x; pan.y = mouse.y;
     if (pan.moved > 5) { cam.manual = true; cam.cx += dx; cam.cy += dy; cv.style.cursor = 'grabbing'; } return; }
   hover = planetAt(mouse.x, mouse.y);
+  if (pull2 && Math.hypot(mouse.x - pull2.x, mouse.y - pull2.y) > 6) pull2.moved = true;
   hoverD = hover ? null : dormantAt(mouse.x, mouse.y);
   cv.style.cursor = hover || routeAt(mouse.x, mouse.y) ? 'pointer' : 'grab';
   if (drag && hover && !drag.stops.includes(hover)) { const max = drag.ext ? MAX_STOPS - drag.ext.stops.length + 1 : MAX_STOPS;
@@ -800,10 +827,11 @@ function pointerEnd(e, cancel) {
   ptrs.delete(e.pointerId);
   if (pinch) { if (ptrs.size < 2) pinch = null; return; }
   if (pan) { if (pan.moved <= 5 && !cancel) G.sel = null; pan = null; return; }
+  if (pull2) { const l = pull2, p = planetAt(mouse.x, mouse.y); pull2 = null; if (!cancel && l.moved && p && G.routes.includes(l.r) && !l.r.stops.includes(p)) insertStop(l.r, l.k, p); return; }
   if (cancel) drag = null; else drop();
 }
 cv.addEventListener('contextmenu', e => { e.preventDefault(); if (!started || G.over || lastPtr === 'touch') return; // right-click a world on the selected route to take it off (a long press on a touch screen does nothing: use the route panel)
-  pos(e); drag = null; const p = planetAt(mouse.x, mouse.y); if (p && G.sel && G.sel.stops.includes(p)) removeStop(G.sel, p); });
+  pos(e); drag = null; pull2 = null; const p = planetAt(mouse.x, mouse.y); if (p && G.sel && G.sel.stops.includes(p)) removeStop(G.sel, p); });
 cv.addEventListener('pointerup', e => pointerEnd(e, false)); cv.addEventListener('pointercancel', e => pointerEnd(e, true));
 cv.addEventListener('pointerleave', () => { if (!drag) hover = null; hoverD = null; });
 cv.addEventListener('wheel', e => { if (!started) return; e.preventDefault(); pos(e); zoomAt(mouse.x, mouse.y, Math.exp(-e.deltaY * (e.ctrlKey ? .012 : .0016))); }, { passive: false });
@@ -933,7 +961,7 @@ function frame(now) {
   if (started && !G.over && !manual) { for (let i = 0; i < speed; i++) step(dt); logTick(dt); }
   aimCamera(false); render(); syncHud(); requestAnimationFrame(frame);
 }
-function begin() { audioStart(); newGame(); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; setSpeed(1); aimCamera(true); }
+function begin() { audioStart(); newGame(); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; ping = null; setSpeed(1); aimCamera(true); }
 $('start').addEventListener('click', begin); $('again').addEventListener('click', begin); $('copy-log').addEventListener('click', logCopy);
 try { const b = +localStorage.getItem('ol-best'); if (b) $('best').textContent = `Best run: ${b} delivered.`; } catch (e) {}
 
@@ -980,7 +1008,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 newGame(); resize(); aimCamera(true); requestAnimationFrame(frame);
-window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
+window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
 })();
 </script>
 

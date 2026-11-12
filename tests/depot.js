@@ -13,7 +13,7 @@ const path = require('path');
     const [A, W, C, X] = G.planets, g = A.good;
     for (const q of G.planets) { for (const k of q.wants.slice()) { delete q.rate[k]; delete q.accD[k]; } q.wants = []; q.orders = {}; q.res = {}; }
     const want = (q, rate) => { q.wants = [g]; q.rate[g] = rate; q.accD[g] = 0; };
-    const out = [.7, 1, 1.4][A.size]; want(C, .55 * out); if (hubBuys) want(W, .3 * out); // demand the seller can keep up with
+    const out = A.level * .5; want(C, .55 * out); if (hubBuys) want(W, .3 * out); // demand the seller can keep up with
     o.buildDepot(W); o.createRoute([A, W]); o.createRoute([W, C]);
     let sold = { W: 0, C: 0 }, peak = 0, lastW = 0, lastC = 0;
     for (let i = 0; i < 20 * 240; i++) { const w0 = W.orders[g] || 0, c0 = C.orders[g] || 0; o.step(0.05); peak = Math.max(peak, W.items.length);

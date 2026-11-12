@@ -181,6 +181,7 @@ button.toast:hover { border-color: var(--ink); }
       <ul>
         <li><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 14 L15 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="3" cy="14" r="3" fill="var(--g1)"/><circle cx="15" cy="4" r="3" fill="var(--g0)"/></svg><span>Drag between worlds to open a route.</span></li>
         <li><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="8" r="4" fill="var(--g2)"/><rect x="1" y="1" width="3.4" height="3.4" fill="var(--g2)"/><rect x="13.6" y="1" width="3.4" height="3.4" fill="var(--g2)"/><circle cx="6" cy="16" r="1.5" fill="none" stroke="var(--g1)" stroke-width="1.2"/><path d="M12 14.3 L13.8 17.4 H10.2 Z" fill="none" stroke="var(--g0)" stroke-width="1.1"/></svg><span>Solid shapes are stock. Hollow shapes are orders.</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="6.5" r="6" fill="var(--g1)"/><circle cx="6.6" cy="6.5" r="1.7" fill="var(--bg)"/><circle cx="11.4" cy="6.5" r="1.7" fill="var(--bg)"/><path d="M5 13.6 L7 17 H3 Z M13 13.6 L15 17 H11 Z" fill="none" stroke="var(--g0)" stroke-width="1.1"/></svg><span>Shapes on a world: units it makes. Shapes in its tag: units it wants.</span></li>
         <li><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="var(--danger)" stroke-width="2.5" stroke-dasharray="30 44" transform="rotate(-90 9 9)"/><circle cx="9" cy="9" r="3.5" fill="var(--muted)"/></svg><span>Don’t let orders pile up at any world.</span></li>
       </ul>
       <button class="go" id="start">Start trading</button>
@@ -222,7 +223,11 @@ const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a
 const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
-const SCALE = [.8, 1, 1.22], OUT = [1, 1, 1], RHO = .92, STREAM = RHO / 2, MAX_BUYS = 3; // for now every world is the same size and makes at the same rate, and every purchase ticks at the same rate: two purchases per seller
+const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
+/* Everything is counted in units, and every unit can be seen. A world's level (1 to 3) is how many units of its good it makes: it is drawn that
+   size, with that many glyphs on it. Each glyph in a world's BUYS tag is one unit it wants. One unit made covers one unit wanted, with a little to
+   spare (RHO). So supply and demand can be balanced by counting glyphs. */
+const out = p => p.level * UNIT, unitsOf = (p, g) => Math.max(1, Math.round(p.rate[g] / WANT)), shuffle = a => a.sort(() => Math.random() - .5);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const r5 = v => Math.round(v / 5) * 5;
@@ -240,8 +245,8 @@ function readColors() {
 function newGame() {
   G = { t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, nextT: 0, routes: [], ships: [], reserve: 4, licences: 3,
     bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
-    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pending: [0, 0, 0, 0, 0], diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
-  makeGalaxy(); balanceDemand();
+    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pool: [0, 0, 0, 0, 0], nextGood: null, nextGrowT: Infinity, diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
+  makeGalaxy();
   for (const p of G.planets) { p.accS = 1; p.wants.forEach((g, i) => p.accD[g] = i ? rnd(.4, .9) : rnd(.9, .99)); } // no slow start: every world has a unit ready and places its first order within a few seconds
 }
 function makeGalaxy() { // every world in the galaxy exists from the start, scattered over a disc with three spiral arms; most are dormant until the network reaches them
@@ -258,37 +263,57 @@ function makeGalaxy() { // every world in the galaxy exists from the start, scat
   const mix = a => a.sort(() => Math.random() - .5), g0 = mix([0, 1, 2, 3]), used = [0, 0, 0, 0, 0];
   spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
     if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
-    used[good]++; const size = 1, slots = MAX_BUYS;
-    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, size, slots, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
+    used[good]++;
+    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, level: 1, grewAt: -9, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
       over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
-  for (let i = 0; i < 4; i++) activate(G.dormant[0]); // the player starts with the home world and its three nearest neighbours
+  for (let i = 0; i < 4; i++) { G.dormant[0].level = 2; activate(G.dormant[0]); } // the player starts with the home world and its three nearest neighbours, each making two units
+  shuffle(G.planets.slice()).forEach((p, i) => { for (let k = i < 2 ? 2 : 1; k > 0; k--) { const g = spareFor(p); if (g != null) buyUnit(p, g); } }); // they buy six of those eight units: SPARE is left over for whoever joins next
   setNext();
 }
 function activate(p) { // a dormant world joins the network: its output adds matching demand to the ledger
-  G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(.3, .8); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
+  G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(.3, .8); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pool[p.good] += p.level;
 }
 function nextWorld() { // the dormant world nearest the middle of the network wakes next, so the network grows as a cluster and not a chain
   const n = G.planets.length, cx = G.planets.reduce((s, p) => s + p.x, 0) / n, cy = G.planets.reduce((s, p) => s + p.y, 0) / n;
   let best = null, bd = Infinity; for (const d of G.dormant) { const m = Math.hypot(d.x - cx, d.y - cy); if (m < bd) { bd = m; best = d; } } return best;
 }
-function setNext() { G.next = G.planets.length < MAXP ? nextWorld() : null; }
+function setNext() { // which world joins next (the nearest the middle of the network), and what it will sell, which is settled once and shown on the map
+  const d = G.planets.length < MAXP ? nextWorld() : null;
+  if (d) { if (G.nextGood == null) G.nextGood = chooseGood(); d.good = G.nextGood; }
+  G.next = d;
+}
+function chooseGood() { // the good the network makes least of, so long as the newcomer will find something else to buy. Fuel first appears with the seventh world
+  const all = [...Array(G.planets.length >= 6 ? 5 : 4).keys()], sup = all.map(g => G.planets.reduce((n, p) => n + (p.good === g ? p.level : 0), 0));
+  const ok = all.filter(g => G.pool.some((v, h) => h !== g && v > 0)), c = ok.length ? ok : all, mn = Math.min(...c.map(g => sup[g]));
+  return pick(c.filter(g => sup[g] === mn));
+}
 function place(p) { p.x = Math.cos(p.ang) * p.r; p.y = Math.sin(p.ang) * p.r; }
 function nameIt() {
   for (;;) { let n = pick(SYL) + pick(SYL); if (Math.random() < .3) n += pick(SYL);
     n = n[0].toUpperCase() + n.slice(1); if (!G.planets.some(p => p.name === n) && !G.dormant.some(p => p.name === n)) return n; }
 }
-/* Supply and demand are fixed rates, the same everywhere. Every world makes its good at the same rate, and every purchase (one good at one
-   world) is wanted at the same rate, STREAM, set so that two purchases take up RHO of one seller's output. When a world joins, two purchases
-   of its good go on the ledger and are handed to the worlds that buy the least so far. A purchase, once given, never changes. A world
-   buys two goods (never its own, never one twice); a purchase nobody has room for waits on the ledger for the next world to join, so a
-   newcomer starts out buying nothing and picks up its two as later worlds arrive. Only once the network is complete, or a good has
-   fallen well behind, does a world take a third. */
-function addWant(p, g) { p.wants.push(g); p.rate[g] = STREAM; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ', g, t: -1.5 }); }
-function balanceDemand() {
-  for (let g = 0; g < GOODS.length; g++) while (G.pending[g] >= STREAM - .001) {
-    const cap = G.planets.length >= MAXP || !G.dormant.length || G.pending[g] >= 3 * STREAM - .001 ? MAX_BUYS : 2;
-    const can = G.planets.filter(p => p.good !== g && !p.wants.includes(g) && p.wants.length < cap); if (!can.length) break;
-    const least = Math.min(...can.map(p => p.wants.length)); addWant(pick(can.filter(p => p.wants.length === least)), g); G.pending[g] -= STREAM; }
+/* The ledger. G.pool[g] is the units of good g that are made but that nobody buys yet. It adds up to SPARE at all times, and only its mix
+   changes. Nothing a world already buys is ever taken away.
+   - A world joins at level 1: its one unit goes into the pool, and it starts buying one unit of another good out of the pool.
+   - A world grows a level: it makes one more unit (into the pool) and buys one more unit (out of the pool), of a new good or more of one it has.
+   - Now and then a world grows by wanting the good the next newcomer will sell, before that world has joined. That good is then one unit short
+     until it arrives: pool[g] is -1 for that while, and never lower. */
+function spareFor(p) { // the good p should buy its next unit of: whichever other good has most to spare, preferring one it does not buy yet
+  const can = G.pool.map((v, g) => g).filter(g => g !== p.good && G.pool[g] > 0); if (!can.length) return null;
+  const top = Math.max(...can.map(g => G.pool[g])), best = can.filter(g => G.pool[g] === top), fresh = best.filter(g => !p.wants.includes(g));
+  return pick(fresh.length ? fresh : best);
+}
+function buyUnit(p, g) { // p wants one more unit of g from now on
+  const more = p.wants.includes(g); if (!more) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); }
+  p.rate[g] += WANT; G.pool[g]--; if (started && G.t - p.born > 1) G.floats.push({ p, text: more ? 'wants more ' : 'now buys ', g, t: -1.5 });
+}
+function grow() { // one world goes up a level
+  for (const p of shuffle(G.planets.filter(p => p.level < MAX_LEVEL && G.t - p.born > 40))) {
+    const ahead = G.next && G.nextGood !== p.good && G.pool[G.nextGood] === 0 && G.nextPlanetT - G.t < 45 && Math.random() < .4; // it wants what the next world will bring
+    G.pool[p.good]++; const g = ahead ? G.nextGood : spareFor(p);
+    if (g == null || (G.next && !G.pool.some((v, h) => h !== G.nextGood && v - (h === g) > 0))) { G.pool[p.good]--; continue; } // nothing to buy, or it would leave the next newcomer nothing to buy
+    p.level++; p.grewAt = G.t; buyUnit(p, g); sfx('join'); logEvent('grew to level ' + p.level + ', wants ' + GOODS[g] + (ahead ? ' (ahead of supply)' : ''), p.name);
+    toast(ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
 }
 const ordersOf = (p, g) => p.orders[g] || 0;
 const totalOrders = p => p.wants.reduce((n, g) => n + ordersOf(p, g), 0);
@@ -304,8 +329,8 @@ const trades = r => r.stops.some(a => buysOn(r, a.good, a) || relays(r, a.good, 
   || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d)) && GOODS.some((_, g) => g < G.active && (buysOn(r, g, d) || relays(r, g, d))));
 function awaken() {
   if (!G.dormant.includes(G.next)) setNext(); const p = G.next; if (!p) return; activate(p); // the one the map has been pointing at
-  balanceDemand(); // the newcomer's output finds buyers, and it takes on a share of the network's demand
-  setNext();
+  const g = spareFor(p); if (g != null) buyUnit(p, g); // it arrives buying one unit of something the network has spare
+  G.nextGood = null; setNext();
   sfx('join'); logEvent('joined: ' + GOODS[p.good], p.name);
   toast(`${p.name} joins the network, selling ${gn(p.good)}.`, false, p);
 }
@@ -335,7 +360,7 @@ function diagTick(gap, dt) {
     const sellers = [...new Set(linked.flatMap(b => reachers(b, g)))];
     if (sellers.some(s => s.stock > 0) || G.ships.some(o => o.cargo.some(c => c.g === g))) continue;
     d.dry += dt; if (sellers.some(s => G.crunch && G.crunch.p === s)) d.crunch += dt;
-    if (sellers.some(s => s.accS >= 1 && s.rc > s.stock && gap[g] <= 0)) d.held += dt; else if (sellers.every(s => s.accS < 1)) { d.flatOut += dt; if (sellers.some(s => faced(s) > OUT[s.size])) d.overAsked += dt; }
+    if (sellers.some(s => s.accS >= 1 && s.rc > s.stock && gap[g] <= 0)) d.held += dt; else if (sellers.every(s => s.accS < 1)) { d.flatOut += dt; if (sellers.some(s => faced(s) > out(s))) d.overAsked += dt; }
     if (G.planets.some(s => s.good === g && !sellers.includes(s) && !G.routes.some(r => r.stops.includes(s)))) d.sellerElsewhere += dt; }
 }
 const tempoNow = () => .9 / Math.max(.8, 16 * .999 ** G.t); // .9: supply and demand both accrue 10% slower than first tuned
@@ -347,7 +372,8 @@ function step(dt) {
   G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 1; setNext(); }
   for (const d of G.planets) if (d.depot) { d.purgeT -= dt; // goods no route can sell any more slowly spoil
     if (d.purgeT <= 0) { d.purgeT = 4; const i = d.items.findIndex(g => !onward(d, g, null)); if (i >= 0) d.items.splice(i, 1); } }
-  if (G.t >= G.nextPlanetT && G.planets.length < MAXP && G.dormant.length) { awaken(); G.nextPlanetT = G.t + 70 + G.planets.length * 2; }
+  if (G.t >= G.nextPlanetT && G.planets.length < MAXP && G.dormant.length) { awaken(); G.nextPlanetT = G.t + 70 + G.planets.length * 2; G.nextGrowT = G.planets.length < MAXP && G.dormant.length ? G.nextPlanetT - 35 : G.t + 75; } // a world grows midway between arrivals
+  if (G.t >= G.nextGrowT) { grow(); G.nextGrowT = G.planets.length < MAXP && G.dormant.length ? Infinity : G.t + 75; }
   if (G.rush && G.t > G.rush.until) G.rush = null;
   if (G.crunch && G.t > G.crunch.until) G.crunch = null;
   if (!G.rush && !G.crunch && G.t >= G.nextRushT) { // events knock a balanced network off balance for a while
@@ -366,7 +392,7 @@ function step(dt) {
     if (p.accD[g] >= 1) { if (totalOrders(p) < ORD_CAP) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2); } else p.accD[g] = 1; } }
   for (let n = G.planets.length, k0 = Math.floor(Math.random() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
     const p = G.planets[(k0 + k) % n], g = p.good, slow = G.crunch && G.crunch.p === p ? .2 : 1; // but releases one only for an order it can reach by route
-    p.accS = Math.min(1, p.accS + OUT[p.size] * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
+    p.accS = Math.min(1, p.accS + out(p) * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
     if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS) {
       if (p.stock < p.rc) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2); }
       else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
@@ -584,7 +610,7 @@ function layout() { // each world's name, BUYS tag and order stacks sit below it
   ctx.font = '700 8px Figtree, system-ui, sans-serif'; const tw = U < .85 ? -8 : ctx.measureText('BUYS').width, dw = ctx.measureText('DEPOT').width; // the word BUYS is dropped when drawn too small to read
   ctx.font = `700 ${nameFont}px Figtree, system-ui, sans-serif`;
   for (const p of G.planets) { const kinds = new Set(p.items).size, rows = Math.max(0, ...p.wants.map(g => ordersOf(p, g)));
-    p.P = pr * SCALE[p.size]; p.px = sx(p.x); p.py = sy(p.y); p.pw = tw + 15 + p.wants.length * 14; p.dw2 = p.depot ? dw + 14 + (kinds ? kinds * 21 : 27) : 0;
+    p.P = pr * SCALE[p.level - 1]; p.px = sx(p.x); p.py = sy(p.y); p.pw = tw + 15 + p.wants.reduce((n, g) => n + 4 + 10 * unitsOf(p, g), 0); p.dw2 = p.depot ? dw + 14 + (kinds ? kinds * 21 : 27) : 0;
     p.bw = Math.max(ctx.measureText(p.name).width, p.pw + (p.depot ? p.dw2 + 5 : 0)) + 6; p.bh = 33 + (rows ? 4 + rows * 9.5 : 0); }
   for (const p of G.planets) {
     const x = p.px, y = p.py, spots = { below: [0, p.P + 5], right: [p.P + 12 + p.bw / 2, -17], left: [-(p.P + 12 + p.bw / 2), -17],
@@ -662,9 +688,10 @@ function render() {
   // planets
   layout();
   for (const p of G.planets) {
-    const P = pr * SCALE[p.size];
+    const P = pr * SCALE[p.level - 1];
     const x = sx(p.x), y = sy(p.y), age = G.t - p.born, pop = Math.min(1, age / .5), R = P * (0.4 + 0.6 * pop);
     ctx.save(); ctx.translate(x, y); ctx.scale(U, U); ctx.translate(-x, -y); // everything about this world is drawn at the current scale
+    const ga = G.t - p.grewAt; if (ga < 1.6) { ctx.globalAlpha = 1 - ga / 1.6; ctx.strokeStyle = C.g[p.good]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, P + ga * 34, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; } // a ring when it grows, as when it joined
     if (age < 1.6) { ctx.globalAlpha = 1 - age / 1.6; ctx.strokeStyle = C.g[p.good]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, P + age * 34, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; }
     if (G.rush && G.rush.p === p) { ctx.strokeStyle = C.g[G.rush.g]; ctx.lineWidth = 2; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(x, y, P + 19 + Math.sin(G.t * 4) * 1.5, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = C.g[G.rush.g]; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('PAYS ×2', x, y - P - 28); }
@@ -672,7 +699,9 @@ function render() {
       ctx.fillStyle = C.danger; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OUTPUT DOWN', x, y - P - 28); }
     ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(x, y, R + 2.5, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = C.bg; glyph(p.good, x, y, R * .42);
+    ctx.fillStyle = C.bg; // one glyph on the world for each unit it makes
+    if (p.level === 1) glyph(p.good, x, y, R * .42); else if (p.level === 2) { glyph(p.good, x - R * .36, y, R * .29); glyph(p.good, x + R * .36, y, R * .29); }
+    else { glyph(p.good, x, y - R * .38, R * .27); glyph(p.good, x - R * .4, y + R * .28, R * .27); glyph(p.good, x + R * .4, y + R * .28, R * .27); }
     if (ping && ping.p === p) { const age = (performance.now() - ping.at) / 1000; if (age > 4) ping = null; else { ctx.strokeStyle = C.ink; // rings spreading out from the world a notification pointed at
       for (let i = 0; i < 2; i++) { const ph = (age * .9 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * Math.min(1, 4 - age); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, R + 6 + ph * 34 * Math.max(.75, U), 0, 6.2832); ctx.stroke(); } ctx.globalAlpha = 1; } }
     if (G.sel && G.sel.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
@@ -691,7 +720,8 @@ function render() {
     const px = bx - (pw + (p.depot ? w2 + 5 : 0)) / 2, py = by + 16;
     if (p.wants.length) { ctx.fillStyle = C.bg; ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(px, py, pw, 17, 8.5); ctx.fill(); ctx.stroke(); } // a world that buys nothing yet has no tag
     ctx.fillStyle = C.muted; if (tw > 0 && p.wants.length) ctx.fillText('BUYS', px + 7, py + 9);
-    p.wants.forEach((g, i) => { const gx = px + tw + 17 + i * 14; ctx.strokeStyle = C.g[g]; glyph(g, gx, py + 8.5, 4.2, true);
+    let slot = px + tw + 10; p.wants.forEach(g => { const u = unitsOf(p, g), gx = slot + 2 + 5 * u; ctx.strokeStyle = C.g[g]; // one glyph in the tag for each unit wanted; orders stack under the middle of them
+      for (let k = 0; k < u; k++) glyph(g, slot + 7 + 10 * k, py + 8.5, 4.2, true); slot += 4 + 10 * u;
       for (let k = 0; k < ordersOf(p, g); k++) { const oy = py + 25 + k * 9.5; ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(gx, oy, 5.5, 0, 6.2832); ctx.fill();
         if (k < resOf(p, g)) { ctx.globalAlpha = .45; ctx.fillStyle = C.g[g]; glyph(g, gx, oy, 3.4); ctx.globalAlpha = 1; } // tinted: a unit is on its way
         ctx.strokeStyle = C.g[g]; glyph(g, gx, oy, 3.4, true); } });
@@ -736,7 +766,7 @@ function syncHud() {
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
   hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
   $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world · will sell ${gn(hoverD.good)} once the network reaches it` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(OUT[hp.size])} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(hp.rate[g]) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'}${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(out(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(hp.rate[g]) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'}${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
   const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
   if (s === sig) return syncLive(); sig = s;
@@ -759,7 +789,7 @@ function routeLive(r) { // the selected route as it is running: what each good o
     const want = buyers.reduce((n, b) => n + b.rate[g] / G.routes.filter(q => brings(q, g, b)).length, 0) * tempoNow() * 60; // a buyer served by several routes is split between them
     const got = age < 20 ? null : r.sold.filter(e => e[1] === g).length * 60 / Math.min(60, age), short = got != null && age > 45 && got < want * .7;
     h += `<span class="row${short ? ' short' : ''}"><span class="flow">${GSVG[g]}${from} → ${buyers.map(b => b.name).join(', ')}</span><span class="nums">wants ${mins(want)} · gets ${got == null ? '–' : mins(got)} a min</span></span>`; }
-  for (const p of r.stops) { const f = faced(p); if (f > OUT[p.size] * 1.05) h += `<span class="note">${p.name} makes ${perMin(OUT[p.size])} ${gn(p.good)} a minute but its routes ask for ${perMin(f)}</span>`; }
+  for (const p of r.stops) { const f = faced(p); if (f > out(p) * 1.05) h += `<span class="note">${p.name} makes ${perMin(out(p))} ${gn(p.good)} a minute but its routes ask for ${perMin(f)}</span>`; }
   const ships = shipsOn(r); if (ships.length) h += `<span class="ships">${ships.map(s => `<span class="ship">${s.cargo.length ? s.cargo.map(c => c.g).sort().map(g => GS10[g]).join('') : '<small>empty</small>'}<small>${s.state === 'dock' ? 'at ' + s.at.name : '→ ' + r.stops[s.idx].name}</small></span>`).join('')}</span>`;
   return h;
 }
@@ -920,7 +950,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 24, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 25, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
@@ -931,8 +961,8 @@ function logSample() {
     credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
     worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1),
     goods: GOODS.map((name, g) => { const sellers = G.planets.filter(p => p.good === g), buyers = G.planets.filter(p => p.wants.includes(g)); if (!sellers.length && !buyers.length) return null; // per good: is it short because of supply, or because nothing links buyer to seller?
-      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + OUT[p.size], 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
-        sellerDetail: sellers.map(p => ({ world: p.name, makes: OUT[p.size], askedFor: +faced(p).toFixed(2), stock: p.stock, onRoutes: G.routes.filter(r => r.stops.includes(p)).length })),
+      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + out(p), 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
+        sellerDetail: sellers.map(p => ({ world: p.name, level: p.level, makes: out(p), askedFor: +faced(p).toFixed(2), stock: p.stock, onRoutes: G.routes.filter(r => r.stops.includes(p)).length })),
         secondsSoFar: Object.fromEntries(Object.entries(G.diag[g]).map(([k, v]) => [k, Math.round(v)])), // see diagTick for what each counter means
         ordersWaiting: buyers.reduce((n, p) => n + ordersOf(p, g), 0), buyersWithNoRouteToASeller: buyers.filter(p => !fedBy(p, g)).length }; }).filter(Boolean) });
 }

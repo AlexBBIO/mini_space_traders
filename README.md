@@ -33,8 +33,9 @@ After a run collapses, the player can enter a name and post the run. On the host
 
 ## How it works
 
-- **Worlds** each make one good and buy two others (a few buy three, and a new world buys nothing until later worlds join).
-- **Supply and demand are fixed rates, the same everywhere.** Every world makes at the same rate and every purchase is wanted at the same rate. When a world joins, two purchases of its good, together 92% of its output, are handed to the worlds that buy the least so far. A purchase never changes once given.
+- **Everything is counted in units you can see.** A world's level (1 to 3) is how many units of its good it makes: it is drawn that size, with that many shapes on it. Each shape in a world's BUYS tag is one unit it wants. One unit made covers one unit wanted, so supply and demand can be balanced by counting shapes.
+- **The network keeps two units spare.** A world joins at level 1 and arrives buying one unit of something the network has spare. Midway between arrivals an existing world grows a level: it makes one more unit and wants one more. Nothing a world already buys is ever taken away.
+- **Sometimes demand runs ahead.** A growing world may want the good the next newcomer will sell before that world has joined, leaving that good one unit short until it arrives. The message says so, and the map shows what the next world sells.
 - **Production is just in time.** A world only releases a unit when an order it can reach by its own routes is waiting, so stock builds up only where deliveries fall behind. A world with nothing it can reach still keeps up to three units on show while orders for its good wait somewhere, so an untapped seller is visible.
 - **The route panel shows a route running.** For each good it carries: what its buyers want and what it delivered over the last minute, any seller asked for more than it makes, and every freighter with its load and heading.
 - **Freighters** load one unit per open order ahead of them, never two for the same order, and wait at a world when there is nothing to carry. They accelerate to the midpoint of a lane, flip, and brake.
@@ -68,7 +69,7 @@ The scripts in `tests/` need [Playwright](https://playwright.dev) (`npm i playwr
 | --- | --- |
 | `tests/bot.js` | A crude bot plays several fast-forwarded runs and reports how long it survives. Also tests a relay through two depots. |
 | `tests/stress.js` | Random routes, removals and depots for 15 minutes, checking the order bookkeeping stays consistent. |
-| `tests/balance.js` | Runs the economy unplayed and prints supply against demand for each good. |
+| `tests/balance.js` | Runs the unit ledger unplayed and checks its rules: two units spare, never more than one short, newcomers arrive buying, nothing is taken away. |
 | `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. |
 | `tests/audio.js` | Plays in real time with sound on and checks for errors. |
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |

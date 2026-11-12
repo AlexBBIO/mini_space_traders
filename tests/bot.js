@@ -36,7 +36,7 @@ const path = require('path');
         if (o.cost('eng') && G.credits > o.cost('eng') * 1.5) o.buy('eng');
         if (sec % 120 === 0) log.push([sec, G.planets.length, G.routes.length, G.ships.length, G.credits, G.delivered]);
       }
-      { const G = o.G, p = G.over; if (p) log = [{ dead: p.name, size: p.size, orders: p.orders, wants: p.wants, lic: G.licences, res: G.reserve, cr: G.credits,
+      { const G = o.G, p = G.over; if (p) log = [{ dead: p.name, level: p.level, orders: p.orders, wants: p.wants, lic: G.licences, res: G.reserve, cr: G.credits,
         routes: G.routes.map(r => r.stops.map(q => q.name + ':' + q.good).join('>') + ' x' + o.shipsOn(r).length), stock: G.planets.map(q => q.name + ':' + q.good + ' s' + q.stock + ' o' + JSON.stringify(q.orders)) }]; }
       const G = o.G; return { t: Math.round(G.t), del: G.delivered, earned: G.earned, ships: G.ships.length, routes: G.routes.length, planets: G.planets.length, cap: G.cap, log };
     });

@@ -211,7 +211,7 @@ const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, BUFFER = 4, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
-const orbW = r => .0024 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes most of an hour
+const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.8, 1, 1.22], OUT = [.7, 1, 1.4], BUYS = [1, 2, 3], APPETITE = [1, 1.6, 2.4], RHO = .92, SIZE_NAME = ['small', 'mid-size', 'large']; // world sizes: body, output, goods bought, share of demand; RHO = system demand as a fraction of supply
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];

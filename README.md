@@ -35,7 +35,8 @@ After a run collapses, the player can enter a name and post the run. On the host
 
 - **Worlds** each make one good and buy one to three others. Bigger worlds make more and order more.
 - **Supply and demand are fixed rates.** When a world joins, demand worth 92% of its output is added for its good and handed out to worlds that do not sell it.
-- **Production is just in time.** A world only releases a unit when an order it can reach by its own routes is waiting, so stock builds up only where deliveries fall behind.
+- **Production is just in time.** A world only releases a unit when an order it can reach by its own routes is waiting, so stock builds up only where deliveries fall behind. A world with nothing it can reach still keeps up to three units on show while orders for its good wait somewhere, so an untapped seller is visible.
+- **The route panel shows a route running.** For each good it carries: what its buyers want and what it delivered over the last minute, any seller asked for more than it makes, and every freighter with its load and heading.
 - **Freighters** load one unit per open order ahead of them, never two for the same order, and wait at a world when there is nothing to carry. They accelerate to the midpoint of a lane, flip, and brake.
 - **Depots** can be built on a world so one route can leave goods there for another route to carry on. A depot keeps a couple of units ahead of demand for each good it passes on.
 - **Events** (demand surges and supply crunches) knock a balanced network off for a while.

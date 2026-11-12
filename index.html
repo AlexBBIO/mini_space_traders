@@ -90,6 +90,15 @@ button.toast:hover { border-color: var(--ink); }
 .panel .stops button { border: 1px solid var(--line); background: none; border-radius: 8px; height: 26px; padding: 0 7px; color: var(--ink); font-weight: 500; white-space: nowrap; }
 .panel .stops button span { color: var(--danger); font-weight: 700; }
 .panel .note { color: var(--danger); font-weight: 600; }
+.live { flex-basis: 100%; display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12.5px; }
+.live:empty { display: none; }
+.live .row { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 8px; }
+.live .nums { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.live .short .nums { color: var(--danger); font-weight: 600; }
+.live .flow { white-space: normal; }
+.ships { display: flex; flex-wrap: wrap; gap: 4px; }
+.ship { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; min-height: 16px; }
+.ship small { color: var(--muted); font-size: 11px; margin-left: 2px; white-space: nowrap; }
 .stepper { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .stepper button, .panel .rm { border: 1px solid var(--line); background: none; border-radius: 8px; height: 28px; min-width: 28px; font-weight: 700; }
 .panel .rm { padding: 0 10px; font-weight: 600; color: var(--danger); }
@@ -226,7 +235,7 @@ const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
-const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
+const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.8, 1, 1.22], OUT = [.7, 1, 1.4], BUYS = [1, 2, 3], APPETITE = [1, 1.6, 2.4], RHO = .92, SIZE_NAME = ['small', 'mid-size', 'large']; // world sizes: body, output, goods bought, share of demand; RHO = system demand as a fraction of supply
@@ -247,7 +256,7 @@ function readColors() {
 function newGame() {
   G = { t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, nextT: 0, routes: [], ships: [], reserve: 4, licences: 3,
     bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
-    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pending: [0, 0, 0, 0, 0] };
+    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pending: [0, 0, 0, 0, 0], diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
   makeGalaxy(); balanceDemand();
   for (const p of G.planets) { p.accS = 1; p.wants.forEach((g, i) => p.accD[g] = i ? rnd(.4, .9) : rnd(.9, .99)); } // no slow start: every world has a unit ready and places its first order within a few seconds
 }
@@ -353,6 +362,24 @@ function reach(s) { // open orders for this world's good that its routes can ser
   for (const r of mine) for (const d of r.stops) if (d.depot && d !== s && onward(d, g, r)) n += Math.max(0, onwardOpen(d, g, r, seen) + AHEAD - buffered(d, g));
   return n;
 }
+const reachers = (b, g) => G.planets.filter(s => s.good === g && G.routes.some(r => r.stops.includes(s) && r.stops.includes(b))); // sellers of g that share a route with buyer b
+function faced(s) { // the demand a seller is asked to cover: each buyer it shares a route with, split between the sellers that buyer can draw on
+  let n = 0; const seen = new Set(); for (const r of G.routes) if (r.stops.includes(s)) for (const b of r.stops) if (b !== s && !seen.has(b) && b.wants.includes(s.good)) { seen.add(b); n += b.rate[s.good] / reachers(b, s.good).length; } return n;
+}
+/* Diagnostics, kept per good in seconds of game time. "dry" is the moment a player notices: three or more orders are waiting at buyers that are linked
+   to a seller, yet no linked seller has stock and nothing is on its way. The other counters say why: the linked sellers are flat out (flatOut), and
+   are asked for more than they make (overAsked); one is in a supply crunch (crunch); or a unit is ready but held back by the ledger (held, which would
+   be a fault). sellerElsewhere: dry while another seller of the good sits on no route. unlinked: orders waiting at a buyer no route links to a seller. */
+function diagTick(gap, dt) {
+  for (let g = 0; g < G.active; g++) { const d = G.diag[g], buyers = G.planets.filter(p => ordersOf(p, g) > 0); if (!buyers.length) continue;
+    if (buyers.some(b => !reachers(b, g).length && !fedBy(b, g))) d.unlinked += dt;
+    const linked = buyers.filter(b => reachers(b, g).length); if (linked.reduce((n, b) => n + ordersOf(b, g), 0) < 3) continue;
+    const sellers = [...new Set(linked.flatMap(b => reachers(b, g)))];
+    if (sellers.some(s => s.stock > 0) || G.ships.some(o => o.cargo.some(c => c.g === g))) continue;
+    d.dry += dt; if (sellers.some(s => G.crunch && G.crunch.p === s)) d.crunch += dt;
+    if (sellers.some(s => s.accS >= 1 && s.rc > s.stock && gap[g] <= 0)) d.held += dt; else if (sellers.every(s => s.accS < 1)) { d.flatOut += dt; if (sellers.some(s => faced(s) > OUT[s.size])) d.overAsked += dt; }
+    if (G.planets.some(s => s.good === g && !sellers.includes(s) && !G.routes.some(r => r.stops.includes(s)))) d.sellerElsewhere += dt; }
+}
 const tempoNow = () => .9 / Math.max(.8, 16 * .999 ** G.t); // .9: supply and demand both accrue 10% slower than first tuned
 function step(dt) {
   G.t += dt;
@@ -374,7 +401,7 @@ function step(dt) {
     G.nextRushT = G.t + rnd(55, 80);
   }
   const tempo = tempoNow(), gap = [0, 0, 0, 0, 0]; // tempo: units per second for a mid-size world, rising all run. gap: per good, orders that have no unit made for them yet
-  for (const p of G.planets) { gap[p.good] -= p.stock; for (const g of p.items) gap[g]--; for (const g of p.wants) gap[g] += ordersOf(p, g); }
+  for (const p of G.planets) { p.rc = reach(p); gap[p.good] -= Math.min(p.stock, p.rc); for (const g of p.items) gap[g]--; for (const g of p.wants) gap[g] += ordersOf(p, g); } // stock no route can deliver does not count against the orders
   for (const o of G.ships) for (const c of o.cargo) gap[c.g]--;
   for (const p of G.planets) for (const g of p.wants) { // demand leads: each good a world buys ticks up at its fixed rate, faster during a surge
     p.accD[g] += p.rate[g] * tempo * dt * (G.rush && G.rush.p === p && G.rush.g === g ? 2.5 : 1);
@@ -382,7 +409,10 @@ function step(dt) {
   for (let n = G.planets.length, k0 = Math.floor(Math.random() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
     const p = G.planets[(k0 + k) % n], g = p.good, slow = G.crunch && G.crunch.p === p ? .2 : 1; // but releases one only for an order it can reach by route
     p.accS = Math.min(1, p.accS + OUT[p.size] * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
-    if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS && p.stock < reach(p)) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2); } }
+    if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS) {
+      if (p.stock < p.rc) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2); }
+      else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
+  G.diagT += dt; if (G.diagT >= 1) { diagTick(gap, G.diagT); G.diagT = 0; }
   for (const p of G.planets) {
     if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`Orders are piling up at ${p.name}.`, true, p); sfx('warn'); } }
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
@@ -446,7 +476,7 @@ function dockAction(s) {
   for (let k = 0; k < s.cargo.length; k++) { // sell: fill the order this unit was loaded for, or any order here that nothing is coming for
     const c = s.cargo[k], g = c.g, n = ordersOf(p, g);
     if (n > 0 && ((c.to === p && !c.relay) || open(p, g) > 0)) { let pay = 4 + n; if (G.rush && G.rush.p === p && G.rush.g === g) pay *= 2; // the longer the queue, the better the price
-      release(c); p.orders[g] = n - 1; s.cargo.splice(k, 1); G.credits += pay; G.earned += pay; G.delivered++; sfx('deliver', g);
+      release(c); p.orders[g] = n - 1; s.cargo.splice(k, 1); r.sold.push([G.t, g]); while (r.sold[0][0] < G.t - 60) r.sold.shift(); G.credits += pay; G.earned += pay; G.delivered++; sfx('deliver', g);
       const f = G.floats.find(f => f.p === p && f.amt && f.t < .4); if (f) { f.amt += pay; f.text = '+' + f.amt; f.t = 0; } else G.floats.push({ p, amt: pay, text: '+' + pay, t: 0 });
       s.dockT = .13; return; }
   }
@@ -485,7 +515,7 @@ function buy(k) {
 function createRoute(stops) {
   if (G.licences <= 0) { toast(`No free route licence. Buy one for ◈${cost('lic')} or remove a route.`); return null; }
   G.licences--; sfx('route'); if (LOG.run && !manual) LOG.run.routesOpened++; let n = 1; while (G.routes.some(r => r.n === n)) n++;
-  const r = { id: G.nextId++, n, stops: stops.slice() }; G.routes.push(r); G.sel = r;
+  const r = { id: G.nextId++, n, stops: stops.slice(), born: G.t, sold: [] /* [time, good] of its deliveries in the last minute */ }; G.routes.push(r); G.sel = r;
   if (G.reserve > 0) addShip(r); else toast('Route opened, but no freighter is in reserve to fly it.');
   return r;
 }
@@ -751,15 +781,32 @@ function syncHud() {
   const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${gn(hoverD.good)} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${gn(hp.good)} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + gn(g)).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
   const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
-  if (s === sig) return; sig = s;
+  if (s === sig) return syncLive(); sig = s;
   let h = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
     return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') : 'no ship'}</button>`; }).join('');
   if (G.sel) { const r = G.sel, n = shipsOn(r).length;
-    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? `<span class="flows">${flows(r)}</span>` : `<span class="note">No stop buys what another sells</span>`}
+    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? '' : `<span class="note">No stop buys what another sells</span>`}
       <span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
       <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
-      <button class="rm" data-act="remove">Remove route</button></div>`; }
-  $('routes').innerHTML = h;
+      <button class="rm" data-act="remove">Remove route</button><div class="live" id="rlive"></div></div>`; }
+  $('routes').innerHTML = h; liveSig = ''; liveT = 0; syncLive();
+}
+const GS10 = GSVG.map(v => v.replace('width="12" height="12"', 'width="10" height="10"'));
+let liveSig = '', liveT = 0;
+function routeLive(r) { // the selected route as it is running: what each good on it is wanted and delivered at, sellers asked for too much, and every freighter with its load
+  const age = G.t - r.born, mins = v => v.toFixed(1); let h = '';
+  const brings = (q, g, b) => q.stops.includes(b) && (q.stops.some(z => z.good === g) || q.stops.some(d => d.depot && d !== b && G.routes.some(r2 => r2 !== q && r2.stops.includes(d) && r2.stops.some(z => z.good === g))));
+  for (let g = 0; g < G.active; g++) { const buyers = r.stops.filter(b => b.wants.includes(g) && brings(r, g, b)); if (!buyers.length) continue;
+    const sellers = r.stops.filter(p => p.good === g), from = sellers.length ? sellers.map(p => p.name).join(', ') : 'depot';
+    const want = buyers.reduce((n, b) => n + b.rate[g] / G.routes.filter(q => brings(q, g, b)).length, 0) * tempoNow() * 60; // a buyer served by several routes is split between them
+    const got = age < 20 ? null : r.sold.filter(e => e[1] === g).length * 60 / Math.min(60, age), short = got != null && age > 45 && got < want * .7;
+    h += `<span class="row${short ? ' short' : ''}"><span class="flow">${GSVG[g]}${from} → ${buyers.map(b => b.name).join(', ')}</span><span class="nums">wants ${mins(want)} · gets ${got == null ? '–' : mins(got)} a min</span></span>`; }
+  for (const p of r.stops) { const f = faced(p); if (f > OUT[p.size] * 1.05) h += `<span class="note">${p.name} makes ${perMin(OUT[p.size])} ${gn(p.good)} a minute but its routes ask for ${perMin(f)}</span>`; }
+  const ships = shipsOn(r); if (ships.length) h += `<span class="ships">${ships.map(s => `<span class="ship">${s.cargo.length ? s.cargo.map(c => c.g).sort().map(g => GS10[g]).join('') : '<small>empty</small>'}<small>${s.state === 'dock' ? 'at ' + s.at.name : '→ ' + r.stops[s.idx].name}</small></span>`).join('')}</span>`;
+  return h;
+}
+function syncLive() { const el = $('rlive'); if (!el || !G.sel) return; const now = performance.now(); if (now - liveT < 250) return; liveT = now; // a few times a second is plenty, and it leaves the panel's buttons alone
+  const h = routeLive(G.sel); if (h !== liveSig) { liveSig = h; el.innerHTML = h; }
 }
 $('routes').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -915,7 +962,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 22, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 23, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
@@ -926,7 +973,9 @@ function logSample() {
     credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
     worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1),
     goods: GOODS.map((name, g) => { const sellers = G.planets.filter(p => p.good === g), buyers = G.planets.filter(p => p.wants.includes(g)); if (!sellers.length && !buyers.length) return null; // per good: is it short because of supply, or because nothing links buyer to seller?
-      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + OUT[p.size], 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0),
+      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + OUT[p.size], 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
+        sellerDetail: sellers.map(p => ({ world: p.name, makes: OUT[p.size], askedFor: +faced(p).toFixed(2), stock: p.stock, onRoutes: G.routes.filter(r => r.stops.includes(p)).length })),
+        secondsSoFar: Object.fromEntries(Object.entries(G.diag[g]).map(([k, v]) => [k, Math.round(v)])), // see diagTick for what each counter means
         ordersWaiting: buyers.reduce((n, p) => n + ordersOf(p, g), 0), buyersWithNoRouteToASeller: buyers.filter(p => !fedBy(p, g)).length }; }).filter(Boolean) });
 }
 function logSave() {
@@ -1008,7 +1057,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 newGame(); resize(); aimCamera(true); requestAnimationFrame(frame);
-window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
+window.__ol = { get G() { return G; }, faced, reach, routeLive, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
 })();
 </script>
 

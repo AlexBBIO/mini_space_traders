@@ -9,7 +9,7 @@ function findStore() {
   const tokenKey = [urlKey.replace(/URL$/, 'TOKEN')].find(k => env[k]) || keys.find(k => /REST(_API)?_TOKEN$/.test(k) && !/READ_ONLY/.test(k) && env[k]);
   return tokenKey ? { url: env[urlKey], token: env[tokenKey] } : null;
 }
-const INDEX = 'orbit-lanes:runs', RUN = 'orbit-lanes:run:', KEEP = 60, DAYS = 30, MAX_BYTES = 60000;
+const INDEX = 'orbit-lanes:runs', RUN = 'orbit-lanes:run:', KEEP = 60, DAYS = 30, MAX_BYTES = 400000;
 
 async function redis(cmds) {
   const st = findStore(), r = await fetch(st.url.replace(/\/$/, '') + '/pipeline', { method: 'POST', headers: { authorization: 'Bearer ' + st.token, 'content-type': 'application/json' }, body: JSON.stringify(cmds) });

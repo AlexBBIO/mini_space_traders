@@ -264,7 +264,7 @@ function makeGalaxy() { // every world in the galaxy exists from the start, scat
   spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
     if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
     used[good]++;
-    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, level: 1, grewAt: -99, news: [], w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
+    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, level: 1, grewAt: -99, news: [], since: {}, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
       over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
   for (let i = 0; i < 4; i++) { G.dormant[0].level = 2; activate(G.dormant[0]); } // the player starts with the home world and its three nearest neighbours, each making two units
   shuffle(G.planets.slice()).forEach((p, i) => { for (let k = i < 2 ? 2 : 1; k > 0; k--) { const g = spareFor(p); if (g != null) buyUnit(p, g); } }); // they buy six of those eight units: SPARE is left over for whoever joins next
@@ -305,7 +305,7 @@ function spareFor(p) { // the good p should buy its next unit of: whichever othe
 }
 function buyUnit(p, g) { // p wants one more unit of g from now on
   const more = p.wants.includes(g); if (!more) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); }
-  p.rate[g] += WANT; G.pool[g]--; if (started && G.t - p.born > 1) { G.floats.push({ p, text: more ? 'wants more ' : 'now buys ', g, t: -1.5 }); p.news.push({ g, k: unitsOf(p, g) - 1, t: G.t, more }); } // news: the new unit is pointed out on the map for a while
+  p.rate[g] += WANT; G.pool[g]--; p.since[g] = G.t; if (started && G.t - p.born > 1) { G.floats.push({ p, text: more ? 'wants more ' : 'now buys ', g, t: -1.5 }); p.news.push({ g, k: unitsOf(p, g) - 1, t: G.t, more }); } // news: the new unit is pointed out on the map for a while
 }
 function grow() { // one world goes up a level
   for (const p of shuffle(G.planets.filter(p => p.level < MAX_LEVEL && G.t - p.born > 40))) {
@@ -957,18 +957,18 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 25, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 26, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
   || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d) && r2.stops.some(z => z.good === g)))));
 function logSample() {
   const tot = G.planets.map(totalOrders);
-  LOG.run.timeline.push({ t: Math.round(G.t), worlds: G.planets.length, routes: G.routes.length, routesIdle: G.routes.filter(r => !shipsOn(r).length || !trades(r)).length, freighters: G.ships.length, reserve: G.reserve,
+  LOG.run.timeline.push({ t: Math.round(G.t), routeDetail: logRoutes(), worlds: G.planets.length, routes: G.routes.length, routesIdle: G.routes.filter(r => !shipsOn(r).length || !trades(r)).length, freighters: G.ships.length, reserve: G.reserve,
     credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
     worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1),
     goods: GOODS.map((name, g) => { const sellers = G.planets.filter(p => p.good === g), buyers = G.planets.filter(p => p.wants.includes(g)); if (!sellers.length && !buyers.length) return null; // per good: is it short because of supply, or because nothing links buyer to seller?
-      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + out(p), 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
+      return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + out(p), 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inDepots: G.planets.reduce((n, z) => n + z.items.filter(v => v === g).length, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
         sellerDetail: sellers.map(p => ({ world: p.name, level: p.level, makes: out(p), askedFor: +faced(p).toFixed(2), stock: p.stock, onRoutes: G.routes.filter(r => r.stops.includes(p)).length })),
         secondsSoFar: Object.fromEntries(Object.entries(G.diag[g]).map(([k, v]) => [k, Math.round(v)])), // see diagTick for what each counter means
         ordersWaiting: buyers.reduce((n, p) => n + ordersOf(p, g), 0), buyersWithNoRouteToASeller: buyers.filter(p => !fedBy(p, g)).length }; }).filter(Boolean) });
@@ -984,12 +984,20 @@ function logTick(dt) { // called every frame of a live run
   const r = LOG.run; if (!r || r.ended || manual) return; r.realSecondsAtSpeed[speed ? 'x' + speed : 'paused'] += dt;
   if (G.t >= LOG.next) { LOG.next += 30; logSample(); if (r.timeline.length % 2 === 0) logSave(); }
 }
+const logRoutes = () => G.routes.map(r => ({ route: r.n, stops: r.stops.map(p => `${p.name} (${GOODS[p.good]} x${p.level}${p.depot ? ', depot' : ''})`), freighters: shipsOn(r).length,
+  carrying: GOODS.map((name, g) => [name, shipsOn(r).reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0)]).filter(e => e[1]).map(e => e.join(' x')).join(', '),
+  deliveredLastMinute: r.sold.filter(e => e[0] > G.t - 60).length }));
 function logEnd() { // what the collapsing world was short of, and whether routes, freighters or stock were the missing piece
   const r = LOG.run, p = G.over; if (!r || !p) return; r.ended = true;
   r.collapse = { world: p.name, joinedAt: Math.round(p.born), goods: p.wants.filter(g => ordersOf(p, g)).map(g => {
     const rs = G.routes.filter(q => q.stops.includes(p) && q.stops.some(z => z !== p && z.good === g)), sellers = [...new Set(rs.flatMap(q => q.stops.filter(z => z !== p && z.good === g)))];
     return { good: GOODS[g], orders: ordersOf(p, g), onTheWay: resOf(p, g), routesToASeller: rs.length, freightersOnThem: rs.reduce((n, q) => n + shipsOn(q).length, 0), stockAtThoseSellers: sellers.reduce((n, z) => n + z.stock, 0),
-      crunchAtSeller: !!(G.crunch && sellers.includes(G.crunch.p)), surgeHere: !!(G.rush && G.rush.p === p && G.rush.g === g) }; }) };
+      crunchAtSeller: !!(G.crunch && sellers.includes(G.crunch.p)), surgeHere: !!(G.rush && G.rush.p === p && G.rush.g === g),
+      secondsSinceItLastWantedMore: Math.round(G.t - (p.since[g] || 0)), // was this a demand that had only just appeared?
+      onTheBoard: { atSellers: G.planets.reduce((n, z) => n + (z.good === g ? z.stock : 0), 0), inDepots: G.planets.reduce((n, z) => n + z.items.filter(v => v === g).length, 0), inFreighters: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0) },
+      depotsThatCouldFeedIt: [...new Set(G.routes.filter(q => q.stops.includes(p)).flatMap(q => q.stops.filter(d => d.depot && d !== p && G.routes.some(r2 => r2 !== q && r2.stops.includes(d) && r2.stops.some(z => z.good === g)))))]
+        .map(d => ({ depot: d.name, holding: d.items.filter(v => v === g).length, unitsHeadingThere: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.relay && c.to === d && c.g === g).length, 0) })) }; }),
+    routes: logRoutes() };
   logSample(); logSave();
 }
 async function logCopy() { // the run record as text, to paste wherever it is wanted

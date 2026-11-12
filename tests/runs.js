@@ -28,7 +28,7 @@ const call = (method, body, url, ip) => new Promise(done => { const res = { code
   ok('no runs to begin with', (await call('GET')).body.runs.length === 0);
   ok('rejects something that is not a run', (await call('POST', { id: 'rabc12345', run: { hello: 1 } })).code === 400);
   ok('rejects a bad id', (await call('POST', { id: '../x', run: { timeline: [] } })).code === 400);
-  ok('rejects an oversized record', (await call('POST', { id: 'rabc12345', run: { timeline: [], pad: 'x'.repeat(70000) } })).code === 413);
+  ok('rejects an oversized record', (await call('POST', { id: 'rabc12345', run: { timeline: [], pad: 'x'.repeat(500000) } })).code === 413);
   ok('saves a run', (await call('POST', { id: 'rabc12345', run: { timeline: [], seconds: 30, delivered: 4 } })).code === 200);
   ok('a later save replaces it', (await call('POST', { id: 'rabc12345', run: { timeline: [{}], seconds: 60, delivered: 9 } })).code === 200 && (await call('GET', null, '/api/runs?id=rabc12345')).body.run.delivered === 9);
   let last; for (let i = 0; i < 25; i++) last = await call('POST', { id: 'rspam0000' + i, run: { timeline: [] } }, null, '9.9.9.9');
@@ -47,7 +47,7 @@ const call = (method, body, url, ip) => new Promise(done => { const res = { code
   await pg.waitForSelector('#over:not([hidden])', { timeout: 240000 }); await pg.waitForTimeout(800);
   const list = (await call('GET')).body.runs.filter(r => !/^rspam|^rabc/.test(r.id)), full = list[0] && (await call('GET', null, '/api/runs?latest=1')).body.run;
   ok('the played run was saved by the page', list.length === 1 && list[0].ended === true && !!list[0].collapsedAt);
-  ok('it records each good\'s supply, demand and missing links', !!full && full.version === 25 && full.timeline.length > 1 && full.timeline[0].goods.length >= 4 && 'buyersWithNoRouteToASeller' in full.timeline[0].goods[0]);
+  ok('it records each good\'s supply, demand and missing links', !!full && full.version === 26 && full.timeline.length > 1 && full.timeline[0].goods.length >= 4 && 'buyersWithNoRouteToASeller' in full.timeline[0].goods[0]);
   await pg.click('#copy-log'); await pg.waitForTimeout(200);
   const clip = await pg.evaluate(() => navigator.clipboard.readText()), msg = await pg.textContent('#copy-msg');
   ok('the end screen copies the record', msg === 'Copied.' && JSON.parse(clip).collapse.world === full.collapse.world);

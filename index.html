@@ -256,7 +256,8 @@ function makeGalaxy() { // every world in the galaxy exists from the start, stru
   spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
     if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
     used[good]++; const size = i < 4 ? s0[i] : pick([0, 0, 0, 1, 1, 1, 1, 2, 2]);
-    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, size, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
+    const slots = i < 4 ? BUYS[size] : pick([[1, 1, 1, 2, 2], [2, 2, 2, 2, 2, 2, 2, 1, 3, 3], [3, 3, 3, 2, 2]][size]); // how many goods it buys: two is commonest, but about a quarter buy one and a fifth buy three
+    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, size, slots, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
       over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
   for (let i = 0; i < 4; i++) activate(G.dormant[0]); // the player starts with the home world and its three nearest neighbours
   G.next = nextWorld();
@@ -278,7 +279,7 @@ const importers = g => G.planets.filter(p => p.wants.includes(g)).length;
    to worlds that do not sell that good. So for every good, total demand stays at RHO of total supply, give or take what is
    still waiting in the ledger for a world with room. */
 const demandOf = p => p.wants.reduce((n, g) => n + p.rate[g], 0), load = p => demandOf(p) / APPETITE[p.size]; // how much a world wants, relative to its size
-const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || p.wants.length < BUYS[p.size]);
+const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || p.wants.length < p.slots);
 function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
 function giveDemand(p, g, amt) { if (!p.wants.includes(g)) addWant(p, g); p.rate[g] += amt; }
 function takeDemand(p, g, amt) { p.rate[g] -= amt; if (p.rate[g] < .04) { dropWant(p, g); p.wants.splice(p.wants.indexOf(g), 1); } }
@@ -298,6 +299,12 @@ function balanceDemand() {
       const g = hi.wants.filter(g => canBuy(lo, g)).sort((a, b) => hi.rate[b] - hi.rate[a])[0]; if (g == null) continue;
       const amt = Math.min(.1, hi.rate[g]); takeDemand(hi, g, amt); giveDemand(lo, g, amt); moved = true; break; }
     if (!moved) break;
+  }
+  for (const p of G.planets) for (let guard = 0; guard < 4 && p.wants.length < p.slots; guard++) { // 3. texture: a world with a free slot takes a share of another good from that good's
+    let best = null; // biggest buyer, and hands back the same amount of one of its own goods where it can, so nobody's total changes
+    for (const d of G.planets) if (d !== p) for (const g of d.wants) if (g !== p.good && !p.wants.includes(g) && d.rate[g] >= .3 && (!best || d.rate[g] > best.d.rate[best.g])) best = { d, g };
+    if (!best) break; const { d, g } = best, amt = Math.min(.2, d.rate[g] / 2), h = p.wants.filter(h => canBuy(d, h) && p.rate[h] > amt + .1).sort((a, b) => p.rate[b] - p.rate[a])[0];
+    takeDemand(d, g, amt); giveDemand(p, g, amt); if (h != null) { takeDemand(p, h, amt); giveDemand(d, h, amt); }
   }
 }
 const ordersOf = (p, g) => p.orders[g] || 0;

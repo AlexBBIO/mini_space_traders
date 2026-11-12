@@ -241,6 +241,7 @@ function newGame() {
     bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
     over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pending: [0, 0, 0, 0, 0] };
   makeGalaxy(); balanceDemand();
+  for (const p of G.planets) { p.accS = 1; p.wants.forEach((g, i) => p.accD[g] = i ? rnd(.4, .9) : rnd(.9, .99)); } // no slow start: every world has a unit ready and places its first order within a few seconds
 }
 function makeGalaxy() { // every world in the galaxy exists from the start, strung along three spiral arms; most are dormant until the network reaches them
   const spots = [], xy = (r, a) => [Math.cos(a) * r, Math.sin(a) * r], twist = rnd(0, 6.2832), ARMS = 3, WIND = 2.5;
@@ -261,7 +262,7 @@ function makeGalaxy() { // every world in the galaxy exists from the start, stru
   G.next = nextWorld();
 }
 function activate(p) { // a dormant world joins the network: its output adds matching demand to the ledger
-  G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(-.6, 0); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
+  G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(.3, .8); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
 }
 function nextWorld() { // the dormant world closest to the network is the next to wake
   let best = null, bd = Infinity; for (const d of G.dormant) { let m = Infinity; for (const p of G.planets) m = Math.min(m, Math.hypot(p.x - d.x, p.y - d.y)); if (m < bd) { bd = m; best = d; } } return best;
@@ -278,7 +279,7 @@ const importers = g => G.planets.filter(p => p.wants.includes(g)).length;
    still waiting in the ledger for a world with room. */
 const demandOf = p => p.wants.reduce((n, g) => n + p.rate[g], 0), load = p => demandOf(p) / APPETITE[p.size]; // how much a world wants, relative to its size
 const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || p.wants.length < BUYS[p.size]);
-function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-1, 0); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
+function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
 function giveDemand(p, g, amt) { if (!p.wants.includes(g)) addWant(p, g); p.rate[g] += amt; }
 function takeDemand(p, g, amt) { p.rate[g] -= amt; if (p.rate[g] < .04) { dropWant(p, g); p.wants.splice(p.wants.indexOf(g), 1); } }
 function balanceDemand() {

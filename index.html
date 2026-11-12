@@ -343,7 +343,7 @@ function reach(s) { // open orders for this world's good that its routes can ser
   for (const r of mine) for (const d of r.stops) if (d.depot && d !== s && onward(d, g, r)) n += Math.max(0, onwardOpen(d, g, r, seen) + AHEAD - buffered(d, g));
   return n;
 }
-const tempoNow = () => 1 / Math.max(.8, 16 * .999 ** G.t);
+const tempoNow = () => .95 / Math.max(.8, 16 * .999 ** G.t); // .95: supply and demand both accrue 5% slower than first tuned
 function step(dt) {
   G.t += dt;
   for (const p of G.planets) { p.ang += p.w * dt; place(p); }

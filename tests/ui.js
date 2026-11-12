@@ -1,0 +1,25 @@
+const { chromium } = require('playwright');
+const path = require('path');
+(async () => {
+  const b = await chromium.launch();
+  const pg = await b.newPage({ viewport: { width: 1200, height: 800 } });
+  const errs = []; pg.on('pageerror', e => errs.push(e.message));
+  const html = require('fs').readFileSync(path.join(__dirname, '..', 'game.html'), 'utf8');
+  await pg.setContent('<!doctype html><html><head><meta charset="utf-8"></head><style>[hidden]{display:none!important}</style><body style="margin:0">' + html + '</body></html>');
+  await pg.click('#start'); await pg.click('#sp0');
+  const pts = await pg.evaluate(() => { const o = __ol, G = o.G, a = G.planets[0], b = G.planets.find(q => q.wants.includes(a.good)); return [o.toScreen(a), o.toScreen(b)]; });
+  await pg.mouse.move(...pts[0]); await pg.mouse.down(); await pg.mouse.move((pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2, { steps: 5 }); await pg.mouse.move(...pts[1], { steps: 5 }); await pg.mouse.up();
+  const r1 = await pg.evaluate(() => ({ routes: __ol.G.routes.length, ships: __ol.G.ships.length, manual: __ol.cam.manual, s: +__ol.cam.s.toFixed(2) }));
+  await pg.mouse.move(600, 380); await pg.mouse.wheel(0, -400); await pg.waitForTimeout(100);
+  const r2 = await pg.evaluate(() => ({ manual: __ol.cam.manual, s: +__ol.cam.s.toFixed(2), cx: Math.round(__ol.cam.cx) }));
+  await pg.mouse.move(1000, 600); await pg.mouse.down(); await pg.mouse.move(900, 560, { steps: 4 }); await pg.mouse.up();
+  const r3 = await pg.evaluate(() => ({ manual: __ol.cam.manual, cx: Math.round(__ol.cam.cx), sel: !!__ol.G.sel }));
+  await pg.waitForTimeout(200); await pg.screenshot({ path: path.join(__dirname, 'zoom.png') });
+  await pg.click('#z-fit'); await pg.waitForTimeout(1200);
+  const r4 = await pg.evaluate(() => ({ manual: __ol.cam.manual, s: +__ol.cam.s.toFixed(2), cx: Math.round(__ol.cam.cx) }));
+  await pg.click('#z-in'); const r5 = await pg.evaluate(() => ({ manual: __ol.cam.manual, s: +__ol.cam.s.toFixed(2) }));
+  await pg.mouse.move(600, 380); await pg.mouse.wheel(0, 2000); await pg.waitForTimeout(100); const r6 = await pg.evaluate(() => ({ manual: __ol.cam.manual }));
+  await pg.mouse.wheel(0, 4000); await pg.waitForTimeout(300); await pg.screenshot({ path: path.join(__dirname, 'galaxy.png') });
+  console.log(JSON.stringify({ r1, r2, r3, r4, r5, r6, errs }));
+  await b.close();
+})();

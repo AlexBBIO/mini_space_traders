@@ -1,0 +1,862 @@
+<title>Orbit Lanes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: one full-screen star chart (canvas) with a thin stat strip on top and a trader's dock along the bottom. */
+:root {
+  --bg: #E6ECEF; --panel: rgba(246, 249, 250, .9); --ink: #17283A; --muted: #62768A; --line: #C3CFD7; --lane: #8FA2B1;
+  --star: #F0A92B; --danger: #D93A2F;
+  --g0: #D8742A; --g1: #2B82C9; --g2: #4F9A3C; --g3: #8457C6; --g4: #C4459A;
+  --display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
+  --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0E1620; --panel: rgba(22, 32, 45, .9); --ink: #E4ECF3; --muted: #8799AA; --line: #263544; --lane: #52677A;
+  --star: #F7C456; --danger: #FF6A5C;
+  --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0E1620; --panel: rgba(22, 32, 45, .9); --ink: #E4ECF3; --muted: #8799AA; --line: #263544; --lane: #52677A;
+  --star: #F7C456; --danger: #FF6A5C;
+  --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; overflow: hidden; }
+#app { position: relative; height: 100%; overflow: hidden; user-select: none; -webkit-user-select: none; }
+#c { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.top, .dock { position: absolute; left: 0; right: 0; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top { top: 0; padding-block: 12px; display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; }
+.top > *, .dock > * { pointer-events: auto; }
+.mark { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+.stats { display: flex; gap: 18px; font-variant-numeric: tabular-nums; }
+.stat { display: flex; flex-direction: column; line-height: 1.15; }
+.stat small { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.stat b { font-size: 17px; font-weight: 700; }
+.speed { margin-left: auto; display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+.speed button { border: 0; background: none; border-radius: 999px; min-width: 36px; height: 30px; font-weight: 600; color: var(--muted); }
+.speed button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.zoom { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: 66px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.zoom button { border: 0; background: none; width: 34px; height: 30px; font-weight: 700; font-size: 15px; }
+.zoom button + button { border-top: 1px solid var(--line); }
+.zoom #z-fit { font-size: 11px; font-weight: 600; }
+.zoom button:disabled { color: var(--muted); opacity: .55; cursor: default; }
+.zoom button:not(:disabled):hover { background: var(--line); }
+.zoom.audio { top: 172px; }
+.zoom.audio button { font-size: 12px; }
+.zoom.audio button[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+#hint { position: absolute; left: 50%; transform: translateX(-50%); top: 76px; width: max-content; max-width: calc(100% - 32px);
+  text-align: center; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font-weight: 600; pointer-events: none; }
+#toasts { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 64px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; max-width: min(320px, calc(100% - 32px)); }
+.toast { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; font-size: 13px; animation: tin .25s ease-out; }
+.toast.warn { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+@keyframes tin { from { opacity: 0; transform: translateY(-6px); } }
+
+.dock { bottom: 0; padding-block: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; max-width: 100%; }
+.pool { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; padding-right: 4px; }
+.pool b { color: var(--ink); }
+.buy { display: flex; gap: 8px; align-items: baseline; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; font-weight: 600; }
+.buy b { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+.buy[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.buy[aria-pressed="true"] b { color: inherit; }
+.buy:disabled { opacity: .45; cursor: default; }
+.buy:not(:disabled):hover { border-color: var(--ink); }
+.chip { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 3px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip i { font-style: normal; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--lane); font-size: 11px; }
+.chip.sel { border-color: var(--ink); }
+.chip.sel i { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip.idle { color: var(--danger); }
+.panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; background: var(--panel); border: 1px solid var(--ink); border-radius: 12px; padding: 6px 12px; max-width: 100%; }
+#info { min-height: 18px; color: var(--muted); font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
+#info b { color: var(--ink); }
+.flow { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.flows { display: flex; flex-wrap: wrap; gap: 3px 12px; justify-content: center; min-width: 0; }
+.panel .stops { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.panel .note { color: var(--danger); font-weight: 600; }
+.stepper { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.stepper button, .panel .rm { border: 1px solid var(--line); background: none; border-radius: 8px; height: 28px; min-width: 28px; font-weight: 700; }
+.panel .rm { padding: 0 10px; font-weight: 600; color: var(--danger); }
+.stepper button:disabled { opacity: .35; cursor: default; }
+
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 78%, transparent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 22px; max-width: 440px; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.card h1 { font-family: var(--display); font-size: 28px; line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.card p { margin: 0; line-height: 1.5; }
+.card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; line-height: 1.45; }
+.card li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; }
+.card li svg { margin-top: 3px; }
+.go { align-self: flex-start; background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 11px 22px; font-weight: 700; font-size: 15px; }
+.best { color: var(--muted); font-size: 13px; }
+.result { display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
+@media (min-width: 900px) {
+  .dock { top: 62px; bottom: 0; left: auto; right: 0; width: 300px; box-sizing: border-box; align-items: stretch; justify-content: flex-start; gap: 12px; padding-left: 14px; padding-block: 4px 14px; overflow-y: auto; }
+  .dock .row { justify-content: flex-start; }
+  .dock .buy { flex: 1 1 100%; justify-content: space-between; }
+  .dock .pool { width: 100%; padding: 2px 0; }
+  .dock .panel { justify-content: flex-start; flex-direction: column; align-items: flex-start; width: 100%; box-sizing: border-box; padding: 10px 12px; }
+  .dock .flows { flex-direction: column; justify-content: flex-start; gap: 4px; }
+  .dock .flow { white-space: normal; }
+  #info { text-align: left; min-height: 54px; order: 3; }
+  #toasts { right: 316px; }
+  #hint { left: calc(50% - 150px); }
+}
+@media (max-width: 560px) { .mark { display: none; } .stats { gap: 14px; } .stat b { font-size: 15px; } .pool { width: 100%; text-align: center; } .toast:nth-last-child(n+3) { display: none; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+</style>
+
+<div id="app">
+  <canvas id="c" aria-label="Galaxy map"></canvas>
+
+  <div class="top">
+    <span class="mark">Orbit Lanes</span>
+    <div class="stats">
+      <span class="stat"><small>Credits</small><b id="s-cr">0</b></span>
+      <span class="stat"><small>Delivered</small><b id="s-del">0</b></span>
+      <span class="stat"><small>Time</small><b id="s-time">0:00</b></span>
+    </div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button id="sp0" aria-pressed="false" title="Pause (Space)">❚❚</button>
+      <button id="sp1" aria-pressed="true">1×</button>
+      <button id="sp2" aria-pressed="false">2×</button>
+      <button id="sp3" aria-pressed="false">3×</button>
+    </div>
+  </div>
+
+  <div class="zoom" role="group" aria-label="Zoom">
+    <button id="z-in" title="Zoom in" aria-label="Zoom in">+</button>
+    <button id="z-fit" title="Frame your network" disabled>Fit</button>
+    <button id="z-out" title="Zoom out" aria-label="Zoom out">−</button>
+  </div>
+
+  <div class="zoom audio" role="group" aria-label="Sound">
+    <button id="a-music" aria-pressed="true" title="Music on or off">♪</button>
+    <button id="a-sfx" aria-pressed="true" title="Sound effects on or off">Fx</button>
+  </div>
+
+  <div id="hint" hidden>Drag from a world to one that buys its goods</div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <div class="dock" id="dock">
+    <div id="info" aria-live="off"></div>
+    <div class="row" id="routes"></div>
+    <div class="row">
+      <span class="pool" id="pool"></span>
+      <button class="buy" id="buy-ship" title="Adds a freighter to your reserve">Freighter <b></b></button>
+      <button class="buy" id="buy-lic" title="Lets you open one more route">Route licence <b></b></button>
+      <button class="buy" id="buy-depot" aria-pressed="false" title="Build a depot at a world. A route can leave goods there for another route to carry on. Depots can chain">Depot <b></b></button>
+      <button class="buy" id="buy-hold" title="Every freighter carries 2 more">Bigger holds <b></b></button>
+      <button class="buy" id="buy-eng" title="Every freighter burns harder, cutting trip times by about 15%">Faster engines <b></b></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="intro">
+    <div class="card">
+      <h1>Orbit Lanes</h1>
+      <p>Run the freight in one corner of a slowly turning galaxy.</p>
+      <ul>
+        <li><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 14 L15 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="3" cy="14" r="3" fill="var(--g1)"/><circle cx="15" cy="4" r="3" fill="var(--g0)"/></svg><span>Drag between worlds to open a route.</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="8" r="4" fill="var(--g2)"/><rect x="1" y="1" width="3.4" height="3.4" fill="var(--g2)"/><rect x="13.6" y="1" width="3.4" height="3.4" fill="var(--g2)"/><circle cx="6" cy="16" r="1.5" fill="none" stroke="var(--g1)" stroke-width="1.2"/><path d="M12 14.3 L13.8 17.4 H10.2 Z" fill="none" stroke="var(--g0)" stroke-width="1.1"/></svg><span>Solid shapes are stock. Hollow shapes are orders.</span></li>
+        <li><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="var(--danger)" stroke-width="2.5" stroke-dasharray="30 44" transform="rotate(-90 9 9)"/><circle cx="9" cy="9" r="3.5" fill="var(--muted)"/></svg><span>Don’t let orders pile up at any world.</span></li>
+      </ul>
+      <button class="go" id="start">Start trading</button>
+      <span class="best" id="best"></span>
+    </div>
+  </div>
+
+  <div class="overlay" id="over" hidden>
+    <div class="card">
+      <h1 id="o-title">Trade collapsed</h1>
+      <p id="o-text"></p>
+      <div class="result">
+        <span class="stat"><small>Survived</small><b id="o-time"></b></span>
+        <span class="stat"><small>Delivered</small><b id="o-del"></b></span>
+        <span class="stat"><small>Earned</small><b id="o-earn"></b></span>
+      </div>
+      <button class="go" id="again">New run</button>
+      <span class="best" id="o-best"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
+const MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, BUFFER = 4, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
+const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
+const orbW = r => .0024 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes most of an hour
+const SCALE = [.8, 1, 1.22], OUT = [.7, 1, 1.4], BUYS = [1, 2, 3], APPETITE = [1, 1.6, 2.4], RHO = .92, SIZE_NAME = ['small', 'mid-size', 'large']; // world sizes: body, output, goods bought, share of demand; RHO = system demand as a fraction of supply
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const r5 = v => Math.round(v / 5) * 5;
+const COST = { ship: n => r5(60 * 1.22 ** n), lic: n => r5(70 * 1.33 ** n), hold: n => [150, 300, 600][n], eng: n => [120, 240, 480][n], depot: n => r5(120 * 1.5 ** n) };
+
+let G, started = false, speed = 1, lastSpeed = 1, drag = null, placing = false, hover = null, hoverD = null, mouse = { x: -99, y: -99 };
+let W = 0, H = 0, cam = { s: 1, cx: 0, cy: 0, ax: 1, ay: 1, manual: false, fast: 0 }, viewTop = 62, viewBot = 0, viewRight = 0, pr = 14, U = 1, nameFont = 12, C = {};
+
+function readColors() {
+  const cs = getComputedStyle(document.documentElement), g = k => cs.getPropertyValue('--' + k).trim();
+  C = { bg: g('bg'), ink: g('ink'), muted: g('muted'), line: g('line'), lane: g('lane'), star: g('star'), danger: g('danger'), g: [0, 1, 2, 3, 4].map(i => g('g' + i)) };
+}
+
+/* ---------- simulation ---------- */
+function newGame() {
+  G = { t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, nextT: 0, routes: [], ships: [], reserve: 4, licences: 3,
+    bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
+    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pending: [0, 0, 0, 0, 0] };
+  makeGalaxy(); balanceDemand();
+}
+function makeGalaxy() { // every world in the galaxy exists from the start, strung along three spiral arms; most are dormant until the network reaches them
+  const spots = [], xy = (r, a) => [Math.cos(a) * r, Math.sin(a) * r], twist = rnd(0, 6.2832), ARMS = 3, WIND = 2.5;
+  const add = (r, a, gap) => { const [x, y] = xy(r, a); if (spots.every(q => Math.hypot(x - q.x, y - q.y) > gap)) { spots.push({ r, ang: a, x, y }); return true; } return false; };
+  for (let arm = 0; arm < ARMS; arm++) for (let k = 0; k < 13; k++) { const t = k / 12; add(300 + t * 800 + rnd(-40, 40), twist + arm * 6.2832 / ARMS + t * WIND + rnd(-.15, .15), 180); }
+  for (let tries = 0, n = 0; tries < 400 && n < 9; tries++) if (add(rnd(320, GAL_R - 40), rnd(0, 6.2832), 240)) n++; // a few worlds out between the arms
+  for (let i = 0; i < 1100; i++) { const r = 230 + Math.random() * 930, a = twist + (i % ARMS) * 6.2832 / ARMS + (r - 300) / 800 * WIND + rnd(-.2, .2) + rnd(-.14, .14);
+    G.dust.push({ r, ang: a, w: orbW(r), a: rnd(.25, .8), s: Math.random() < .25 ? 2.5 : 1.5 }); }
+  const home = spots.slice().sort((p, q) => Math.abs(p.r - 600) - Math.abs(q.r - 600))[0];
+  spots.sort((p, q) => Math.hypot(p.x - home.x, p.y - home.y) - Math.hypot(q.x - home.x, q.y - home.y)); // roughly the order the network will reach them
+  const mix = a => a.sort(() => Math.random() - .5), g0 = mix([0, 1, 2, 3]), s0 = mix([0, 1, 1, 2]), used = [0, 0, 0, 0, 0];
+  spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
+    if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
+    used[good]++; const size = i < 4 ? s0[i] : pick([0, 0, 0, 1, 1, 1, 1, 2, 2]);
+    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, size, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
+      over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
+  for (let i = 0; i < 4; i++) activate(G.dormant[0]); // the player starts with the home world and its three nearest neighbours
+  G.next = nextWorld();
+}
+function activate(p) { // a dormant world joins the network: its output adds matching demand to the ledger
+  G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(-.6, 0); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
+}
+function nextWorld() { // the dormant world closest to the network is the next to wake
+  let best = null, bd = Infinity; for (const d of G.dormant) { let m = Infinity; for (const p of G.planets) m = Math.min(m, Math.hypot(p.x - d.x, p.y - d.y)); if (m < bd) { bd = m; best = d; } } return best;
+}
+function place(p) { p.x = Math.cos(p.ang) * p.r; p.y = Math.sin(p.ang) * p.r; }
+function nameIt() {
+  for (;;) { let n = pick(SYL) + pick(SYL); if (Math.random() < .3) n += pick(SYL);
+    n = n[0].toUpperCase() + n.slice(1); if (!G.planets.some(p => p.name === n) && !G.dormant.some(p => p.name === n)) return n; }
+}
+const importers = g => G.planets.filter(p => p.wants.includes(g)).length;
+/* Supply and demand are fixed rates. Each world makes its good at a set rate (by size) and wants each good it buys at a set
+   rate. When a world joins, demand worth RHO of its output is added to the ledger for its good, and the ledger is handed out
+   to worlds that do not sell that good. So for every good, total demand stays at RHO of total supply, give or take what is
+   still waiting in the ledger for a world with room. */
+const demandOf = p => p.wants.reduce((n, g) => n + p.rate[g], 0), load = p => demandOf(p) / APPETITE[p.size]; // how much a world wants, relative to its size
+const canBuy = (p, g) => p.good !== g && (p.wants.includes(g) || p.wants.length < BUYS[p.size]);
+function addWant(p, g) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-1, 0); if (started && G.t - p.born > 1) G.floats.push({ p, text: 'now buys ' + GOODS[g], t: -1.5 }); }
+function giveDemand(p, g, amt) { if (!p.wants.includes(g)) addWant(p, g); p.rate[g] += amt; }
+function takeDemand(p, g, amt) { p.rate[g] -= amt; if (p.rate[g] < .04) { dropWant(p, g); p.wants.splice(p.wants.indexOf(g), 1); } }
+function balanceDemand() {
+  const skip = new Set();
+  for (let guard = 0; guard < 1500; guard++) { // 1. hand out demand that has no buyer yet, a slice at a time, to the least-loaded world that can take it
+    let g = -1; for (let k = 0; k < GOODS.length; k++) if (G.pending[k] >= .03 && !skip.has(k) && (g < 0 || G.pending[k] > G.pending[g])) g = k; if (g < 0) break;
+    let w = G.planets.filter(p => canBuy(p, g)).sort((a, b) => load(a) - load(b))[0];
+    if (!w) { // every world's list is full: the least-loaded one swaps its smallest purchase for this good, if other worlds still buy that one
+      const c = G.planets.filter(p => p.good !== g && p.wants.some(k => importers(k) > 1)).sort((a, b) => load(a) - load(b))[0]; if (!c) { skip.add(g); continue; } // nobody can: it waits for the next world
+      const k = c.wants.filter(k => importers(k) > 1).sort((a, b) => c.rate[a] - c.rate[b])[0]; G.pending[k] += c.rate[k]; takeDemand(c, k, c.rate[k]); w = c; }
+    const amt = Math.min(G.pending[g], .1); giveDemand(w, g, amt); G.pending[g] -= amt;
+  }
+  for (let guard = 0; guard < 1500; guard++) { // 2. level out: a heavily loaded world passes a slice to a lightly loaded one that can take one of its goods
+    const by = G.planets.slice().sort((a, b) => load(a) - load(b)); let moved = false;
+    for (let i = by.length - 1; i > 0 && !moved; i--) for (let j = 0; j < i; j++) { const hi = by[i], lo = by[j]; if (load(hi) - load(lo) < .25) break;
+      const g = hi.wants.filter(g => canBuy(lo, g)).sort((a, b) => hi.rate[b] - hi.rate[a])[0]; if (g == null) continue;
+      const amt = Math.min(.1, hi.rate[g]); takeDemand(hi, g, amt); giveDemand(lo, g, amt); moved = true; break; }
+    if (!moved) break;
+  }
+}
+const ordersOf = (p, g) => p.orders[g] || 0;
+const totalOrders = p => p.wants.reduce((n, g) => n + ordersOf(p, g), 0);
+const resOf = (p, g) => p.res[g] || 0, open = (p, g) => ordersOf(p, g) - resOf(p, g); // open = orders with no unit on the way yet
+const release = c => { if (c.to && !c.relay && resOf(c.to, c.g) > 0) c.to.res[c.g]--; }; // a unit gives up the order it was loaded for
+function dropWant(p, g) { // a world stops buying a good: its orders are cancelled and units already on the way lose their buyer
+  delete p.orders[g]; delete p.res[g]; delete p.rate[g]; delete p.accD[g]; for (const o of G.ships) for (const c of o.cargo) if (c.to === p && c.g === g && !c.relay) c.to = null;
+}
+const buysOn = (r, g, not) => r.stops.some(q => q !== not && q.wants.includes(g)); // a world on this route buys g
+function onward(d, g, from, seen) { // can goods left at the depot on world d reach a buyer by a route other than `from`, through further depots if need be?
+  seen = seen || new Set(); seen.add(d);
+  return G.routes.some(r2 => r2 !== from && r2.stops.includes(d) && (buysOn(r2, g, d) || r2.stops.some(e => e.depot && !seen.has(e) && onward(e, g, r2, seen))));
+}
+const relays = (r, g, at) => r.stops.some(e => e.depot && e !== at && onward(e, g, r, new Set(at ? [at] : []))); // r can hand g to a depot further along
+const trades = r => r.stops.some(a => buysOn(r, a.good, a) || relays(r, a.good, a))
+  || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d)) && GOODS.some((_, g) => g < G.active && (buysOn(r, g, d) || relays(r, g, d))));
+function awaken() {
+  const p = nextWorld(); if (!p) return; activate(p);
+  balanceDemand(); // the newcomer's output finds buyers, and it takes on a share of the network's demand
+  G.next = G.planets.length < MAXP ? nextWorld() : null;
+  sfx('join'); logEvent('joined: ' + SIZE_NAME[p.size] + ' ' + GOODS[p.good], p.name);
+  toast(`${p.name} joins the network: a ${SIZE_NAME[p.size]} world selling ${GOODS[p.good]}.`);
+}
+function reach(s) { // open orders for this world's good that its routes can serve: at stops it shares a route with, plus a few more if a depot can pass them on
+  const g = s.good, seen = new Set(); let n = 0, relay = false;
+  for (const r of G.routes) if (r.stops.includes(s)) { for (const b of r.stops) if (b !== s && !seen.has(b) && b.wants.includes(g)) { seen.add(b); n += Math.max(0, open(b, g)); } relay = relay || relays(r, g, s); }
+  if (relay) { let far = 0; for (const b of G.planets) if (!seen.has(b) && b.wants.includes(g)) far += Math.max(0, open(b, g)); n += Math.min(BUFFER, far); }
+  return n;
+}
+const tempoNow = () => 1 / Math.max(.8, 16 * .999 ** G.t);
+function step(dt) {
+  G.t += dt;
+  for (const p of G.planets) { p.ang += p.w * dt; place(p); }
+  for (const p of G.dormant) { p.ang += p.w * dt; place(p); }
+  for (const d of G.dust) d.ang += d.w * dt;
+  G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 1; G.next = G.planets.length < MAXP ? nextWorld() : null; }
+  for (const d of G.planets) if (d.depot) { d.purgeT -= dt; // goods no route can sell any more slowly spoil
+    if (d.purgeT <= 0) { d.purgeT = 4; const i = d.items.findIndex(g => !onward(d, g, null)); if (i >= 0) d.items.splice(i, 1); } }
+  if (G.t >= G.nextPlanetT && G.planets.length < MAXP && G.dormant.length) { awaken(); G.nextPlanetT = G.t + 70 + G.planets.length * 2; }
+  if (G.rush && G.t > G.rush.until) G.rush = null;
+  if (G.crunch && G.t > G.crunch.until) G.crunch = null;
+  if (!G.rush && !G.crunch && G.t >= G.nextRushT) { // events knock a balanced network off balance for a while
+    const c = G.planets.filter(p => G.t - p.born > 20 && p.wants.length);
+    if (c.length) { const p = pick(c);
+      if (Math.random() < .5) { const g = pick(p.wants); G.rush = { p, g, until: G.t + 30 }; logEvent('surge: ' + GOODS[g], p.name); toast(`Demand surge at ${p.name}: it wants ${GOODS[g]} much faster for a while, and pays double.`); }
+      else { G.crunch = { p, until: G.t + 35 }; logEvent('crunch: ' + GOODS[p.good], p.name); toast(`Supply crunch at ${p.name}: its ${GOODS[p.good]} output has dropped for a while.`, true); }
+      sfx('event'); }
+    G.nextRushT = G.t + rnd(55, 80);
+  }
+  const tempo = tempoNow(), gap = [0, 0, 0, 0, 0]; // tempo: units per second for a mid-size world, rising all run. gap: per good, orders that have no unit made for them yet
+  for (const p of G.planets) { gap[p.good] -= p.stock; for (const g of p.items) gap[g]--; for (const g of p.wants) gap[g] += ordersOf(p, g); }
+  for (const o of G.ships) for (const c of o.cargo) gap[c.g]--;
+  for (const p of G.planets) for (const g of p.wants) { // demand leads: each good a world buys ticks up at its fixed rate, faster during a surge
+    p.accD[g] += p.rate[g] * tempo * dt * (G.rush && G.rush.p === p && G.rush.g === g ? 2.5 : 1);
+    if (p.accD[g] >= 1) { if (totalOrders(p) < ORD_CAP) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2); } else p.accD[g] = 1; } }
+  for (let n = G.planets.length, k0 = Math.floor(Math.random() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
+    const p = G.planets[(k0 + k) % n], g = p.good, slow = G.crunch && G.crunch.p === p ? .2 : 1; // but releases one only for an order it can reach by route
+    p.accS = Math.min(1, p.accS + OUT[p.size] * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
+    if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS && p.stock < reach(p)) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2); } }
+  for (const p of G.planets) {
+    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`Orders are piling up at ${p.name}.`, true); sfx('warn'); } }
+    else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
+    if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
+  }
+  for (const s of G.ships) stepShip(s, dt);
+  for (const f of G.floats) f.t += dt; G.floats = G.floats.filter(f => f.t < 1);
+}
+function bend(a, b, side) { // control point of the lane between two worlds, bowed out just enough to clear the star
+  const lo = a.id < b.id ? a : b, hi = lo === a ? b : a, ux = hi.x - lo.x, uy = hi.y - lo.y, L = Math.hypot(ux, uy) || 1, nx = -uy / L, ny = ux / L;
+  const m = lo.x * nx + lo.y * ny, t0 = -(lo.x * ux + lo.y * uy) / (L * L), sgn = side || (m >= 0 ? 1 : -1); let h = 0;
+  if (t0 > 0 && t0 < 1 && m * sgn < CLEAR) { const tc = Math.max(.22, Math.min(.78, t0)); h = Math.min(3.2 * CLEAR, (CLEAR - m * sgn) / (2 * tc * (1 - tc))); }
+  return { cx: (a.x + b.x) / 2 + nx * sgn * h, cy: (a.y + b.y) / 2 + ny * sgn * h, sgn };
+}
+const laneLen = (a, b, c) => (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.cx - a.x, c.cy - a.y) + Math.hypot(b.x - c.cx, b.y - c.cy)) / 2;
+function stepShip(s, dt) {
+  if (s.state === 'dock') { s.x = s.at.x + s.ox; s.y = s.at.y + s.oy; s.dockT -= dt; if (s.dockT <= 0) dockAction(s); return; }
+  const a = s.route.stops[s.prev], b = s.route.stops[s.idx], c = bend(a, b, s.side), len = laneLen(a, b, c) || 1;
+  const e = Math.min(.45, DOCK_R / len), run = len * (1 - 2 * e); // it flies from just off one world to just off the next
+  s.tau = Math.min(1, s.tau + dt / (2 * Math.sqrt(run / G.accel))); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
+  const kk = s.tau < .5 ? 2 * s.tau * s.tau : 1 - 2 * (1 - s.tau) ** 2, t = e + (1 - 2 * e) * kk, u = 1 - t;
+  s.x = u * u * a.x + 2 * u * t * c.cx + t * t * b.x; s.y = u * u * a.y + 2 * u * t * c.cy + t * t * b.y;
+  const dx = u * (c.cx - a.x) + t * (b.x - c.cx), dy = u * (c.cy - a.y) + t * (b.y - c.cy), d = Math.hypot(dx, dy) || 1; s.hx = dx / d; s.hy = dy / d;
+  // attitude: nose along the lane while speeding up, then it flips and flies tail-first to brake. The drive only lights once the ship is lined up
+  const want = Math.atan2(s.hy, s.hx) + (s.tau >= .5 ? Math.PI : 0), da = ((((want - s.face + Math.PI) % 6.2832) + 6.2832) % 6.2832) - Math.PI, turn = 2.6 * dt;
+  s.face += Math.abs(da) <= turn ? da : Math.sign(da) * turn; s.burn = Math.abs(da) < .3 && s.tau < .985 ? 1 : 0;
+  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; }
+}
+/* How a freighter decides what to do at a stop. Every unit it loads is tied to one specific open order (or to a depot that
+   will pass it on), so two freighters never load for the same order, and it only loads for stops ahead of it. */
+const side = (r, i, d) => d > 0 ? r.stops.slice(i + 1) : r.stops.slice(0, i).reverse(); // the stops in one direction, nearest first
+const isSource = (r, q) => buysOn(r, q.good, q) || relays(r, q.good, q); // something this world makes can be sold along this route
+function buffered(d, g) { let n = d.items.filter(v => v === g).length; for (const o of G.ships) for (const c of o.cargo) if (c.relay && c.to === d && c.g === g) n++; return n; }
+function jobs(r, q) { // what a freighter on route r could usefully load at world q, as [good, destination, isRelay, fromDepot]
+  const out = [], others = r.stops.filter(z => z !== q);
+  if (q.stock > 0) { const g = q.good, direct = buysOn(r, g, q);
+    for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, false]);
+      else if (!direct && z.depot && z.items.length < DEPOT_CAP && buffered(z, g) < BUFFER && onward(z, g, r)) out.push([g, z, true, false]); } }
+  if (q.depot) for (const g of new Set(q.items)) for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, true]);
+    else if (z.depot && z.items.length < DEPOT_CAP && !onward(q, g, r) && onward(z, g, r, new Set([q]))) out.push([g, z, true, true]); }
+  return out;
+}
+function pull(s, r, i, d) { // is there a reason to head this way: cargo to deliver, goods here for an order that way, or goods waiting that way?
+  const way = side(r, i, d); if (!way.length) return false;
+  if (s.cargo.some(c => way.includes(c.to))) return true;
+  if (s.cargo.length >= G.cap) return false;
+  if (jobs(r, r.stops[i]).some(j => way.includes(j[1]))) return true;
+  return way.some(q => { // goods waiting at a stop that way, beyond what freighters already there or heading there can take
+    const units = jobs(r, q).reduce((n, j) => n + (j[2] ? 1 : open(j[1], j[0])), 0); if (!units) return false;
+    let room = 0; for (const o of G.ships) if (o !== s && o.route === r && (o.at === q || (o.state === 'fly' && r.stops[o.idx] === q))) room += G.cap - o.cargo.length;
+    return units > room; });
+}
+function depart(s) {
+  const r = s.route; s.prev = s.idx; s.idx += s.dir; s.state = 'fly'; s.at = null;
+  const a = r.stops[s.prev], b = r.stops[s.idx], c = bend(a, b); s.side = c.sgn; s.tau = 0;
+}
+function dockAction(s) {
+  const p = s.at, r = s.route, i = s.idx;
+  for (let k = 0; k < s.cargo.length; k++) { // sell: fill the order this unit was loaded for, or any order here that nothing is coming for
+    const c = s.cargo[k], g = c.g, n = ordersOf(p, g);
+    if (n > 0 && ((c.to === p && !c.relay) || open(p, g) > 0)) { let pay = 4 + n; if (G.rush && G.rush.p === p && G.rush.g === g) pay *= 2; // the longer the queue, the better the price
+      release(c); p.orders[g] = n - 1; s.cargo.splice(k, 1); G.credits += pay; G.earned += pay; G.delivered++; sfx('deliver', g);
+      const f = G.floats.find(f => f.p === p && f.amt && f.t < .4); if (f) { f.amt += pay; f.text = '+' + f.amt; f.t = 0; } else G.floats.push({ p, amt: pay, text: '+' + pay, t: 0 });
+      s.dockT = .13; return; }
+  }
+  if (p.depot) for (let k = 0; k < s.cargo.length; k++) { // leave relay goods at this world's depot for another route
+    const c = s.cargo[k]; if (c.relay && c.to === p && p.items.length < DEPOT_CAP) { s.cargo.splice(k, 1); p.items.push(c.g); s.dockT = .13; return; }
+  }
+  for (let k = 0; k < s.cargo.length; k++) { // a unit whose buyer changed its mind finds another order on this route, waits for one, or is dumped
+    const c = s.cargo[k]; if (c.to && (c.relay ? onward(c.to, c.g, r) : c.to.wants.includes(c.g))) continue;
+    c.to = null; c.relay = false; const z = r.stops.find(z => z !== p && open(z, c.g) > 0), e = z ? null : r.stops.find(e => e.depot && e !== p && onward(e, c.g, r));
+    if (z) { c.to = z; z.res[c.g] = resOf(z, c.g) + 1; } else if (e) { c.to = e; c.relay = true; }
+    else if (!buysOn(r, c.g)) { s.cargo.splice(k, 1); s.dockT = .06; return; }
+  }
+  const fwd = pull(s, r, i, s.dir); if (!fwd && pull(s, r, i, -s.dir)) s.dir = -s.dir; else if (!fwd) { // nothing to do in either direction
+    if (!s.cargo.length && !isSource(r, p)) { let best = -1; // wait at the nearest world that has something to sell on this route
+      r.stops.forEach((q, k) => { if (k !== i && isSource(r, q) && (best < 0 || Math.abs(k - i) < Math.abs(best - i))) best = k; });
+      if (best >= 0) { s.dir = best > i ? 1 : -1; depart(s); return; } }
+    s.dockT = .35; return;
+  }
+  if (s.cargo.length < G.cap) { // load one unit for an order ahead (nearest first), before any depot relay
+    const way = side(r, i, s.dir), j = jobs(r, p).filter(j => way.includes(j[1])).sort((a, b) => a[2] - b[2] || way.indexOf(a[1]) - way.indexOf(b[1]))[0];
+    if (j) { const [g, z, relay, fromDepot] = j; if (fromDepot) p.items.splice(p.items.indexOf(g), 1); else p.stock--;
+      if (!relay) z.res[g] = resOf(z, g) + 1; s.cargo.push({ g, to: z, relay }); s.dockT = .13; return; }
+  }
+  depart(s);
+}
+
+/* ---------- player actions ---------- */
+const cost = k => COST[k](G.bought[k]);
+function buy(k) {
+  const c = cost(k); if (c == null || G.credits < c) return false;
+  G.credits -= c; G.bought[k]++;
+  if (k === 'ship') G.reserve++; else if (k === 'lic') G.licences++; else if (k === 'hold') G.cap += 2; else G.accel *= 1.4;
+  sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: k });
+  return true;
+}
+function createRoute(stops) {
+  if (G.licences <= 0) { toast(`No free route licence. Buy one for ◈${cost('lic')} or remove a route.`); return null; }
+  G.licences--; sfx('route'); if (LOG.run && !manual) LOG.run.routesOpened++; let n = 1; while (G.routes.some(r => r.n === n)) n++;
+  const r = { id: G.nextId++, n, stops: stops.slice() }; G.routes.push(r); G.sel = r;
+  if (G.reserve > 0) addShip(r); else toast('Route opened, but no freighter is in reserve to fly it.');
+  return r;
+}
+function buildDepot(p) {
+  const c = cost('depot'); if (G.credits < c) { placing = false; return false; }
+  if (p.depot) { toast(`${p.name} already has a depot.`); return false; }
+  G.credits -= c; G.bought.depot++; placing = false; p.depot = true; p.items = []; sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: 'depot', world: p.name });
+  if (G.bought.depot === 1) toast(`Depot built at ${p.name}. A route can leave goods there for another route to carry on.`);
+  return true;
+}
+const shipsOn = r => G.ships.filter(s => s.route === r);
+function addShip(r) {
+  if (G.reserve <= 0) return false; G.reserve--;
+  const idx = shipsOn(r).length % 2 ? r.stops.length - 1 : 0, p = r.stops[idx];
+  G.ships.push({ route: r, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0 });
+  return true;
+}
+function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; }
+function removeRoute(r) {
+  for (const s of shipsOn(r)) s.cargo.forEach(release);
+  G.reserve += shipsOn(r).length; G.ships = G.ships.filter(s => s.route !== r);
+  if (LOG.run && !manual) LOG.run.routesRemoved++;
+  G.routes.splice(G.routes.indexOf(r), 1); G.licences++; if (G.sel === r) G.sel = null;
+}
+function extendRoute(r, add, atStart) {
+  add = add.filter(p => !r.stops.includes(p)).slice(0, MAX_STOPS - r.stops.length); if (!add.length) return;
+  if (atStart) { r.stops.unshift(...add.slice().reverse()); for (const s of shipsOn(r)) { s.idx += add.length; s.prev += add.length; } }
+  else r.stops.push(...add);
+}
+function endGame() {
+  let best = 0; try { best = +localStorage.getItem('ol-best') || 0; } catch (e) {}
+  const isBest = G.delivered > best; if (isBest) try { localStorage.setItem('ol-best', G.delivered); } catch (e) {}
+  sfx('over'); logEnd();
+  $('o-title').textContent = `Trade collapsed at ${G.over.name}`;
+  $('o-text').textContent = `Its orders for ${G.over.wants.filter(g => ordersOf(G.over, g)).map(g => GOODS[g]).join(' and ')} went unfilled for too long.`;
+  $('o-time').textContent = fmtT(G.t); $('o-del').textContent = G.delivered; $('o-earn').textContent = '◈' + G.earned;
+  $('o-best').textContent = isBest ? 'New best run.' : `Best run: ${best} delivered.`;
+  setTimeout(() => { $('over').hidden = false; $('again').focus(); }, 900);
+}
+function toast(msg, warn) {
+  if (!started) return; const el = document.createElement('div'); el.className = 'toast' + (warn ? ' warn' : ''); el.textContent = msg;
+  $('toasts').appendChild(el); while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
+  setTimeout(() => el.remove(), 5200);
+}
+const fmtT = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+
+/* ---------- view ---------- */
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), b = cv.getBoundingClientRect();
+  W = b.width; H = b.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); cam.fast = 45; // refit quickly after the window changes size
+}
+function fitView() { // the automatic view frames the worlds in the network, plus the next one due to join
+  const dock = $('dock'), wide = W >= 900; viewBot = wide ? H - 30 : H - dock.offsetHeight - 6; viewRight = wide ? W - dock.offsetWidth : W;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of G.next ? G.planets.concat(G.next) : G.planets) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  const hh = (viewBot - viewTop) / 2, hw = viewRight / 2 - 8, pad = 115;
+  return { s: Math.min(1.25, hw / ((x1 - x0) / 2 + pad), hh / ((y1 - y0) / 2 + pad)), mx: (x0 + x1) / 2, my: (y0 + y1) / 2, vx: viewRight / 2, vy: viewTop + hh, min: Math.min(hw, hh) / (GAL_R + 80) };
+}
+function aimCamera(snap) {
+  const f = fitView();
+  if (snap || !cam.manual) { const k = snap ? 1 : cam.fast > 0 ? .16 : .03, k2 = snap ? 1 : cam.fast > 0 ? .25 : .08; if (cam.fast > 0) cam.fast--;
+    cam.manual = false; cam.s += (f.s - cam.s) * k; cam.cx += (f.vx - f.mx * cam.s - cam.cx) * k2; cam.cy += (f.vy - f.my * cam.s - cam.cy) * k2; }
+  else { const m = GAL_R * cam.s; cam.cx = Math.max(f.vx - m, Math.min(f.vx + m, cam.cx)); cam.cy = Math.max(f.vy - m, Math.min(f.vy + m, cam.cy)); }
+  U = Math.max(.55, Math.min(1.15, cam.s * .9)); nameFont = Math.max(12, 10 / U); // drawing scale for worlds, labels and freighters; names never drop below 10px
+}
+function zoomAt(mx, my, f) { // zoom about a screen point, out as far as the whole galaxy; the Fit button hands the camera back to the automatic view
+  const ns = Math.max(fitView().min, Math.min(3.2, cam.s * f));
+  cam.cx = mx - (mx - cam.cx) * ns / cam.s; cam.cy = my - (my - cam.cy) * ns / cam.s; cam.s = ns; cam.manual = true; if (LOG.run) LOG.run.zoomedOrPanned = true;
+}
+const sx = x => cam.cx + x * cam.s * cam.ax, sy = y => cam.cy + y * cam.s * cam.ay;
+const ORDER = [3, 4, 2, 5, 1, 6, 0, 7];
+const STARS = Array.from({ length: 110 }, () => [Math.random(), Math.random(), Math.random()]);
+
+function glyph(kind, x, y, r, hollow) {
+  ctx.beginPath();
+  if (kind === 0) { ctx.moveTo(x, y - r * 1.15); ctx.lineTo(x + r * 1.1, y + r * .8); ctx.lineTo(x - r * 1.1, y + r * .8); }
+  else if (kind === 1) ctx.arc(x, y, r, 0, 6.2832);
+  else if (kind === 2) ctx.rect(x - r * .88, y - r * .88, r * 1.76, r * 1.76);
+  else if (kind === 3) { ctx.moveTo(x, y - r * 1.25); ctx.lineTo(x + r * 1.05, y); ctx.lineTo(x, y + r * 1.25); ctx.lineTo(x - r * 1.05, y); }
+  else for (let i = 0; i < 6; i++) { const a = i * 1.0472; ctx[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r * 1.12, y + Math.sin(a) * r * 1.12); }
+  ctx.closePath(); if (hollow) { ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke(); } else ctx.fill();
+}
+function layout() { // each world's name, BUYS tag and order stacks sit below it, or slide beside it when the star or a neighbour is in the way
+  ctx.font = '700 8px Figtree, system-ui, sans-serif'; const tw = U < .85 ? -8 : ctx.measureText('BUYS').width, dw = ctx.measureText('DEPOT').width; // the word BUYS is dropped when drawn too small to read
+  ctx.font = `700 ${nameFont}px Figtree, system-ui, sans-serif`;
+  for (const p of G.planets) { const kinds = new Set(p.items).size, rows = Math.max(0, ...p.wants.map(g => ordersOf(p, g)));
+    p.P = pr * SCALE[p.size]; p.px = sx(p.x); p.py = sy(p.y); p.pw = tw + 15 + p.wants.length * 14; p.dw2 = p.depot ? dw + 14 + (kinds ? kinds * 21 : 27) : 0;
+    p.bw = Math.max(ctx.measureText(p.name).width, p.pw + (p.depot ? p.dw2 + 5 : 0)) + 6; p.bh = 33 + (rows ? 4 + rows * 9.5 : 0); }
+  for (const p of G.planets) {
+    const x = p.px, y = p.py, spots = { below: [0, p.P + 5], right: [p.P + 12 + p.bw / 2, -17], left: [-(p.P + 12 + p.bw / 2), -17],
+      lowRight: [p.P * .7 + 8 + p.bw / 2, p.P * .7], lowLeft: [-(p.P * .7 + 8 + p.bw / 2), p.P * .7] };
+    const hits = (k, pad) => { const L = x + (spots[k][0] - p.bw / 2 - pad) * U, T = y + (spots[k][1] - pad) * U, R = L + (p.bw + 2 * pad) * U, B = T + (p.bh + 2 * pad) * U; let n = 0;
+      const circ = (cx, cy, rad) => Math.hypot(cx - Math.max(L, Math.min(R, cx)), cy - Math.max(T, Math.min(B, cy))) < rad;
+      if (circ(cam.cx, cam.cy, CORE * .5 * cam.s)) n += 2;
+      for (const q of G.planets) if (q !== p) { if (circ(q.px, q.py, (q.P + 14) * U)) n += 2; if (q.rect && L < q.rect[2] && R > q.rect[0] && T < q.rect[3] && B > q.rect[1]) n++; }
+      return n; };
+    let side = p.side || 'below';
+    if (side !== 'below' && !hits('below', 10)) side = 'below';
+    else if (hits(side, 0)) { let bs = hits(side, 0); for (const k of x >= cam.cx ? ['below', 'right', 'lowRight', 'left', 'lowLeft'] : ['below', 'left', 'lowLeft', 'right', 'lowRight']) { const h = hits(k, 0); if (h < bs) { bs = h; side = k; } } }
+    p.side = side; const [tx, ty] = spots[side];
+    if (p.bx == null) { p.bx = tx; p.by = ty; } else { p.bx += (tx - p.bx) * .18; p.by += (ty - p.by) * .18; }
+    p.rect = [x + (p.bx - p.bw / 2) * U, y + p.by * U, x + (p.bx + p.bw / 2) * U, y + (p.by + p.bh) * U];
+  }
+}
+function laneOffsets() { // routes sharing a planet pair run side by side
+  const m = new Map();
+  for (const r of G.routes) { r.off = [];
+    for (let k = 0; k < r.stops.length - 1; k++) { const a = r.stops[k].id, b = r.stops[k + 1].id, key = a < b ? a + '-' + b : b + '-' + a;
+      if (!m.has(key)) m.set(key, []); m.get(key).push([r, k]); } }
+  for (const l of m.values()) l.forEach(([r, k], i) => r.off[k] = (i - (l.length - 1) / 2) * 7 * U);
+}
+function segPts(r, k) {
+  let a = r.stops[k], b = r.stops[k + 1]; const flip = a.id > b.id; if (flip) [a, b] = [b, a];
+  const ax = sx(a.x), ay = sy(a.y), bx = sx(b.x), by = sy(b.y), d = Math.hypot(bx - ax, by - ay) || 1, o = (r.off && r.off[k]) || 0, nx = -(by - ay) / d * o, ny = (bx - ax) / d * o; // a route drawn this frame has no side-by-side offset yet
+  const c = bend(a, b);
+  return { ax: ax + nx, ay: ay + ny, bx: bx + nx, by: by + ny, cx: sx(c.cx) + nx, cy: sy(c.cy) + ny, nx, ny };
+}
+
+function render() {
+  const now = performance.now();
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = C.line; for (const [a, b, c] of STARS) ctx.fillRect(a * W, b * H, c < .2 ? 2 : 1, c < .2 ? 2 : 1);
+  // spiral-arm dust, the galactic core, and the dormant worlds the network has not reached yet
+  ctx.fillStyle = C.muted; for (const d of G.dust) { const x = sx(Math.cos(d.ang) * d.r), y = sy(Math.sin(d.ang) * d.r); if (x < 0 || x > W || y < 0 || y > H) continue; ctx.globalAlpha = d.a * .75; ctx.fillRect(x, y, d.s, d.s); }
+  ctx.fillStyle = C.star; for (const [k, a] of [[1.5, .07], [1.1, .09], [.75, .12], [.45, .2], [.2, .9]]) { ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(cam.cx, cam.cy, CORE * k * cam.s, 0, 6.2832); ctx.fill(); }
+  ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const d of G.dormant) { const x = sx(d.x), y = sy(d.y); if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue; const nx = d === G.next, k = Math.max(.75, U);
+    ctx.fillStyle = C.bg; ctx.strokeStyle = nx ? C.g[d.good] : C.lane; ctx.lineWidth = nx ? 2 : 1.3; ctx.beginPath(); ctx.arc(x, y, (nx ? 7 : 4.5) * k, 0, 6.2832); ctx.fill(); ctx.stroke();
+    if (nx) { ctx.fillStyle = C.g[d.good]; glyph(d.good, x, y, 3 * k); ctx.setLineDash([3, 4]); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, (13 + Math.sin(G.t * 3) * 1.5) * k, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
+    if (nx || d === hoverD) { ctx.font = '600 10px Figtree, system-ui, sans-serif'; ctx.fillStyle = C.muted; ctx.fillText(nx ? d.name + ' · next to join' : d.name, x, y + 20 * k + 4); } }
+  // lanes
+  laneOffsets(); ctx.lineCap = 'round';
+  for (const pass of [0, 1]) for (const r of G.routes) { const sel = r === G.sel; if (sel !== !!pass) continue;
+    ctx.globalAlpha = sel || !G.sel ? 1 : .38; ctx.strokeStyle = sel ? C.ink : C.lane; ctx.lineWidth = (sel ? 3.5 : 2) * Math.max(.7, U); ctx.beginPath();
+    for (let k = 0; k < r.stops.length - 1; k++) { const s = segPts(r, k); ctx.moveTo(s.ax, s.ay); ctx.quadraticCurveTo(s.cx, s.cy, s.bx, s.by); } ctx.stroke();
+    const s = segPts(r, 0), mx = (s.ax + 2 * s.cx + s.bx) / 4, my = (s.ay + 2 * s.cy + s.by) / 4;
+    ctx.fillStyle = sel ? C.ink : C.bg; ctx.globalAlpha = 1; const B = Math.max(.8, U); ctx.beginPath(); ctx.arc(mx, my, 7.5 * B, 0, 6.2832); ctx.fill(); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = sel ? C.bg : C.ink; ctx.font = `700 ${10 * B}px Figtree, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(r.n, mx, my + .5);
+  }
+  if (drag) { const bad = !drag.ext && G.licences <= 0;
+    ctx.strokeStyle = bad ? C.danger : C.ink; ctx.lineWidth = 2.5; ctx.setLineDash([6, 6]); ctx.beginPath();
+    drag.stops.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](sx(p.x), sy(p.y))); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); ctx.setLineDash([]); }
+  // freighters (drawn under the worlds, so a docked freighter tucks in behind its world)
+  const rows = G.cap > 8 ? 3 : 2, cols = Math.ceil(G.cap / rows), L = cols * 5.4 + 3, hh = rows * 2.9 + .2;
+  for (const s of G.ships) {
+    let x = sx(s.x), y = sy(s.y);
+    if (s.state === 'fly' && s.prev !== s.idx) { const k = Math.min(s.prev, s.idx), q = segPts(s.route, k), a = s.route.stops[s.prev], b = s.route.stops[s.idx];
+      const f = Math.min(1, Math.min(Math.hypot(s.x - a.x, s.y - a.y), Math.hypot(s.x - b.x, s.y - b.y)) * cam.s / 26); x += q.nx * f; y += q.ny * f; }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(s.face); ctx.scale(U, U);
+    s.glow += (s.burn - s.glow) * .18; if (s.glow > .02) { const f = s.glow * (.82 + .18 * Math.sin(now * .05 + s.x)); // the drive plume, flickering
+      ctx.fillStyle = C.star; ctx.globalAlpha = .22 * s.glow; ctx.beginPath(); ctx.arc(-L / 2 - 7, 0, 12 * f, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = .95 * s.glow; ctx.beginPath(); ctx.moveTo(-L / 2 - 2, -3); ctx.quadraticCurveTo(-L / 2 - 8 * f, -2.6, -L / 2 - 17 * f, 0); ctx.quadraticCurveTo(-L / 2 - 8 * f, 2.6, -L / 2 - 2, 3); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.moveTo(-L / 2, -2.6); ctx.lineTo(-L / 2 - 3, -3.8); ctx.lineTo(-L / 2 - 3, 3.8); ctx.lineTo(-L / 2, 2.6); ctx.fill(); // engine bell
+    ctx.fillStyle = C.bg; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(-L / 2, -hh, L, hh * 2, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.ink;
+    ctx.beginPath(); ctx.moveTo(L / 2 + .5, -4.5); ctx.lineTo(L / 2 + 6, 0); ctx.lineTo(L / 2 + .5, 4.5); ctx.fill();
+    s.cargo.forEach((c, i) => { ctx.fillStyle = C.g[c.g]; glyph(c.g, -L / 2 + 4.2 + Math.floor(i / rows) * 5.4, (i % rows - (rows - 1) / 2) * 5.4, 2.05); });
+    ctx.restore();
+  }
+  // planets
+  layout();
+  for (const p of G.planets) {
+    const P = pr * SCALE[p.size];
+    const x = sx(p.x), y = sy(p.y), age = G.t - p.born, pop = Math.min(1, age / .5), R = P * (0.4 + 0.6 * pop);
+    ctx.save(); ctx.translate(x, y); ctx.scale(U, U); ctx.translate(-x, -y); // everything about this world is drawn at the current scale
+    if (age < 1.6) { ctx.globalAlpha = 1 - age / 1.6; ctx.strokeStyle = C.g[p.good]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, P + age * 34, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; }
+    if (G.rush && G.rush.p === p) { ctx.strokeStyle = C.g[G.rush.g]; ctx.lineWidth = 2; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(x, y, P + 19 + Math.sin(G.t * 4) * 1.5, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = C.g[G.rush.g]; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('PAYS ×2', x, y - P - 28); }
+    if (G.crunch && G.crunch.p === p) { ctx.strokeStyle = C.danger; ctx.lineWidth = 2; ctx.setLineDash([2, 5]); ctx.beginPath(); ctx.arc(x, y, P + 19 + Math.sin(G.t * 4) * 1.5, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = C.danger; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OUTPUT DOWN', x, y - P - 28); }
+    ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(x, y, R + 2.5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = C.bg; glyph(p.good, x, y, R * .42);
+    if (G.sel && G.sel.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
+    if (p === hover || (drag && drag.stops.includes(p))) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
+    for (const q of drag ? drag.stops : hover ? [hover] : []) if (q !== p && p.wants.includes(q.good)) { ctx.strokeStyle = C.g[q.good]; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, P + 17, 0, 6.2832); ctx.stroke(); }
+    if (p.over > 0) { ctx.strokeStyle = C.danger; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(x, y, P + 3.5, -1.5708, -1.5708 + p.over * 6.2832); ctx.stroke(); }
+    const ts = Math.max(3.6, P * .34);
+    for (let i = 0; i < p.stock; i++) { // goods waiting to ship fan out over the top of the world
+      const a = -1.5708 + (ORDER[i] - 3.5) * .6, tx = x + Math.cos(a) * (P + 10.5), ty = y + Math.sin(a) * (P + 10.5);
+      ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(tx, ty, ts + 2, 0, 6.2832); ctx.fill(); ctx.fillStyle = C.g[p.good]; glyph(p.good, tx, ty, ts); }
+    const bx = x + p.bx, by = y + p.by; // top centre of this world's label block: name, then the BUYS tag with open orders stacking under each good
+    ctx.font = `700 ${nameFont}px Figtree, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = C.bg; ctx.lineWidth = 4; ctx.strokeText(p.name, bx, by + 8); ctx.fillStyle = p.over > 0 ? C.danger : C.ink; ctx.fillText(p.name, bx, by + 8);
+    ctx.font = '700 8px Figtree, system-ui, sans-serif'; ctx.textAlign = 'left';
+    const kinds = [...new Set(p.items)], tw = U < .85 ? -8 : ctx.measureText('BUYS').width, dw = ctx.measureText('DEPOT').width, pw = p.pw, w2 = p.dw2;
+    const px = bx - (pw + (p.depot ? w2 + 5 : 0)) / 2, py = by + 16;
+    ctx.fillStyle = C.bg; ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(px, py, pw, 17, 8.5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.muted; if (tw > 0) ctx.fillText('BUYS', px + 7, py + 9);
+    p.wants.forEach((g, i) => { const gx = px + tw + 17 + i * 14; ctx.strokeStyle = C.g[g]; glyph(g, gx, py + 8.5, 4.2, true);
+      for (let k = 0; k < ordersOf(p, g); k++) { const oy = py + 25 + k * 9.5; ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(gx, oy, 5.5, 0, 6.2832); ctx.fill();
+        if (k < resOf(p, g)) { ctx.globalAlpha = .45; ctx.fillStyle = C.g[g]; glyph(g, gx, oy, 3.4); ctx.globalAlpha = 1; } // tinted: a unit is on its way
+        ctx.strokeStyle = C.g[g]; glyph(g, gx, oy, 3.4, true); } });
+    if (p.depot) { // a square tag beside it lists the goods this world's depot is holding for other routes
+      const qx = px + pw + 5, qy = py;
+      ctx.fillStyle = C.bg; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(qx, qy, w2, 17, 4); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.fillText('DEPOT', qx + 7, qy + 9); ctx.font = '700 9px Figtree, system-ui, sans-serif';
+      kinds.forEach((g, i) => { const gx = qx + dw + 17 + i * 21; ctx.fillStyle = C.g[g]; glyph(g, gx, qy + 8.5, 3.6); ctx.fillStyle = C.ink; ctx.fillText(p.items.filter(v => v === g).length, gx + 6, qy + 9); });
+      if (!kinds.length) { ctx.fillStyle = C.muted; ctx.fillText('empty', qx + dw + 12, qy + 9); }
+    }
+    ctx.restore();
+  }
+  for (const p of G.planets) { // when zoomed in, a marker at the screen edge points to any off-screen world that is new or in trouble
+    const x = sx(p.x), y = sy(p.y); if ((x > 0 && x < viewRight && y > viewTop - 8 && y < viewBot) || !(p.over > 0 || G.t - p.born < 12)) continue;
+    const ex = Math.max(26, Math.min(viewRight - 26, x)), ey = Math.max(viewTop + 16, Math.min(viewBot - 16, y)), a = Math.atan2(y - ey, x - ex), col = p.over > 0 ? C.danger : C.ink;
+    ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(ex, ey, 14, 0, 6.2832); ctx.fill(); ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(ex, ey, 9.5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = C.bg; glyph(p.good, ex, ey, 4); ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(ex, ey, 12.5, 0, 6.2832); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 21, ey + Math.sin(a) * 21); ctx.lineTo(ex + Math.cos(a + .5) * 15, ey + Math.sin(a + .5) * 15); ctx.lineTo(ex + Math.cos(a - .5) * 15, ey + Math.sin(a - .5) * 15); ctx.fill();
+  }
+  for (const f of G.floats) { ctx.globalAlpha = 1 - Math.max(0, f.t); ctx.fillStyle = C.ink; ctx.font = '700 12px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center';
+    const fx = sx(f.p.x) + (pr + 18) * U, fy = sy(f.p.y) - (pr + 6) * U - Math.max(0, f.t) * 18; ctx.lineJoin = 'round'; ctx.strokeStyle = C.bg; ctx.lineWidth = 4; ctx.strokeText(f.text, fx, fy); ctx.fillText(f.text, fx, fy); } ctx.globalAlpha = 1;
+}
+
+/* ---------- HUD ---------- */
+let sig = '', infoSig = '';
+const perMin = r => (r * tempoNow() * 60).toFixed(1);
+const GSVG = ['<path d="M6 1 L11 10 H1 Z"/>', '<circle cx="6" cy="6" r="4.6"/>', '<rect x="1.6" y="1.6" width="8.8" height="8.8"/>', '<path d="M6 .5 L11 6 L6 11.5 L1 6 Z"/>', '<path d="M11 6 L8.5 10.3 H3.5 L1 6 L3.5 1.7 H8.5 Z"/>']
+  .map((d, g) => `<svg width="12" height="12" viewBox="0 0 12 12" fill="var(--g${g})" aria-hidden="true">${d}</svg>`);
+function flows(r) { // what this route actually carries, for the route panel
+  return [...new Set(r.stops)].map(a => { const to = r.stops.filter((b, i) => b !== a && b.wants.includes(a.good) && r.stops.indexOf(b) === i).map(b => b.name);
+    const d = to.length ? null : r.stops.find(d => d.depot && d !== a && onward(d, a.good, r)); if (d) to.push(d.name + ' depot');
+    return to.length ? `<span class="flow">${GSVG[a.good]}${a.name} → ${to.join(', ')}</span>` : ''; }).join('');
+}
+function syncHud() {
+  $('s-cr').textContent = '◈' + G.credits; $('s-del').textContent = G.delivered; $('s-time').textContent = fmtT(G.t);
+  $('pool').innerHTML = `<b>${G.reserve}</b> freighter${G.reserve === 1 ? '' : 's'} in reserve · <b>${G.licences}</b> route licence${G.licences === 1 ? '' : 's'} free`;
+  for (const [k, id] of [['ship', 'buy-ship'], ['lic', 'buy-lic'], ['hold', 'buy-hold'], ['eng', 'buy-eng'], ['depot', 'buy-depot']]) {
+    const c = cost(k), b = $(id); b.disabled = c == null || G.credits < c; b.lastElementChild.textContent = c == null ? 'max' : '◈' + c; }
+  const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
+  hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
+  $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant ${SIZE_NAME[hoverD.size]} world · will sell ${GOODS[hoverD.good]} once the network reaches it` : hp ? `<b>${hp.name}</b> · ${SIZE_NAME[hp.size]} world · makes up to ${perMin(OUT[hp.size])} ${GOODS[hp.good]} a minute · wants ${hp.wants.map(g => perMin(hp.rate[g]) + ' ' + GOODS[g]).join(', ') || 'nothing yet'} a minute${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}` : '';
+  if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
+  const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
+  if (s === sig) return; sig = s;
+  let h = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
+    return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') : 'no ship'}</button>`; }).join('');
+  if (G.sel) { const r = G.sel, n = shipsOn(r).length;
+    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? `<span class="flows">${flows(r)}</span>` : `<span class="stops">${r.stops.map(p => p.name).join(' → ')}</span><span class="note">No stop buys what another sells</span>`}
+      <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
+      <button class="rm" data-act="remove">Remove route</button></div>`; }
+  $('routes').innerHTML = h;
+}
+$('routes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.r) { const r = G.routes.find(r => r.id === +b.dataset.r); G.sel = G.sel === r ? null : r; }
+  else if (G.sel) { const a = b.dataset.act; if (a === 'plus') addShip(G.sel); else if (a === 'minus') removeShip(G.sel); else if (a === 'remove') removeRoute(G.sel); }
+});
+for (const k of ['ship', 'lic', 'hold', 'eng']) $('buy-' + k).addEventListener('click', () => { if (buy(k) && k === 'ship' && G.sel) addShip(G.sel); });
+$('buy-depot').addEventListener('click', () => { placing = !placing && G.credits >= cost('depot'); });
+function setSpeed(v) { if (v) lastSpeed = v; speed = v; for (let i = 0; i < 4; i++) $('sp' + i).setAttribute('aria-pressed', i === v); }
+for (let i = 0; i < 4; i++) $('sp' + i).addEventListener('click', () => setSpeed(i === 0 && speed === 0 ? lastSpeed : i));
+addEventListener('keydown', e => {
+  if (!started || e.target.tagName === 'BUTTON' && e.code === 'Space') return;
+  if (e.code === 'Space') { e.preventDefault(); setSpeed(speed ? 0 : lastSpeed); }
+  else if (['1', '2', '3'].includes(e.key)) setSpeed(+e.key);
+  else if (G.sel && (e.key === '+' || e.key === '=')) addShip(G.sel);
+  else if (G.sel && e.key === '-') removeShip(G.sel);
+  else if (G.sel && (e.key === 'Delete' || e.key === 'Backspace')) removeRoute(G.sel);
+  else if (e.key === 'Escape') { G.sel = null; placing = false; }
+});
+
+/* ---------- pointer ---------- */
+function planetAt(x, y) { let best = null, bd = pr * U + 11; for (const p of G.planets) { const d = Math.hypot(sx(p.x) - x, sy(p.y) - y); if (d < bd) { bd = d; best = p; } } return best; }
+function dormantAt(x, y) { let best = null, bd = 14; for (const p of G.dormant) { const d = Math.hypot(sx(p.x) - x, sy(p.y) - y); if (d < bd) { bd = d; best = p; } } return best; }
+function routeAt(x, y) {
+  let best = null, bd = 12;
+  for (const r of G.routes) for (let k = 0; k < r.stops.length - 1; k++) { const s = segPts(r, k);
+    for (let i = 0; i <= 14; i++) { const t = i / 14, u = 1 - t, d = Math.hypot(u * u * s.ax + 2 * u * t * s.cx + t * t * s.bx - x, u * u * s.ay + 2 * u * t * s.cy + t * t * s.by - y);
+      if (d < bd) { bd = d; best = r; } } }
+  return best;
+}
+const pos = e => { const b = cv.getBoundingClientRect(); mouse.x = e.clientX - b.left; mouse.y = e.clientY - b.top; };
+const ptrs = new Map(); let pan = null, pinch = null;
+const gap = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+cv.addEventListener('pointerdown', e => {
+  if (!started || G.over) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
+  if (ptrs.size === 2) { drag = null; pan = null; pinch = gap(); return; }
+  if (placing) { const q = planetAt(mouse.x, mouse.y); if (q) buildDepot(q); return; }
+  const p = planetAt(mouse.x, mouse.y);
+  if (p) { cv.setPointerCapture(e.pointerId); const r = G.sel; let ext = null, atStart = false;
+    if (r && r.stops.length < MAX_STOPS) { if (r.stops[r.stops.length - 1] === p) ext = r; else if (r.stops[0] === p) { ext = r; atStart = true; } }
+    drag = { stops: [p], ext, atStart }; return; }
+  const r = routeAt(mouse.x, mouse.y);
+  if (r) G.sel = r; else { pan = { x: mouse.x, y: mouse.y, moved: 0 }; cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointermove', e => {
+  pos(e); if (!started) return; if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
+  if (pinch && ptrs.size === 2) { const g = gap(); zoomAt(g.x, g.y, g.d / pinch.d); if (cam.manual) { cam.cx += g.x - pinch.x; cam.cy += g.y - pinch.y; } pinch = g; return; }
+  if (pan) { const dx = mouse.x - pan.x, dy = mouse.y - pan.y; pan.moved += Math.abs(dx) + Math.abs(dy); pan.x = mouse.x; pan.y = mouse.y;
+    if (pan.moved > 5) { cam.manual = true; cam.cx += dx; cam.cy += dy; cv.style.cursor = 'grabbing'; } return; }
+  hover = planetAt(mouse.x, mouse.y);
+  hoverD = hover ? null : dormantAt(mouse.x, mouse.y);
+  cv.style.cursor = hover || routeAt(mouse.x, mouse.y) ? 'pointer' : 'grab';
+  if (drag && hover && !drag.stops.includes(hover)) { const max = drag.ext ? MAX_STOPS - drag.ext.stops.length + 1 : MAX_STOPS;
+    if (drag.stops.length < max && !(drag.ext && drag.ext.stops.includes(hover))) drag.stops.push(hover); }
+});
+function drop() { if (!drag) return; const d = drag; drag = null;
+  if (d.stops.length < 2) return; if (d.ext) extendRoute(d.ext, d.stops.slice(1), d.atStart); else createRoute(d.stops); }
+function pointerEnd(e, cancel) {
+  ptrs.delete(e.pointerId);
+  if (pinch) { if (ptrs.size < 2) pinch = null; return; }
+  if (pan) { if (pan.moved <= 5 && !cancel) G.sel = null; pan = null; return; }
+  if (cancel) drag = null; else drop();
+}
+cv.addEventListener('pointerup', e => pointerEnd(e, false)); cv.addEventListener('pointercancel', e => pointerEnd(e, true));
+cv.addEventListener('pointerleave', () => { if (!drag) hover = null; hoverD = null; });
+cv.addEventListener('wheel', e => { if (!started) return; e.preventDefault(); pos(e); zoomAt(mouse.x, mouse.y, Math.exp(-e.deltaY * (e.ctrlKey ? .012 : .0016))); }, { passive: false });
+const midZoom = f => zoomAt(viewRight / 2, (viewTop + viewBot) / 2, f);
+$('z-in').addEventListener('click', () => midZoom(1.35)); $('z-out').addEventListener('click', () => midZoom(1 / 1.35));
+$('z-fit').addEventListener('click', () => { if (cam.manual) { cam.manual = false; cam.fast = 45; } });
+
+/* ---------- loop ---------- */
+/* ---------- sound: everything is synthesised in the browser, so there are no audio files ---------- */
+const A = { ctx: null, music: true, sfx: true, last: {}, step: 0, nextT: 0, mel: 3 }, BPM = 72, mtof = m => 440 * 2 ** ((m - 69) / 12);
+try { A.music = localStorage.getItem('ol-music') !== '0'; A.sfx = localStorage.getItem('ol-sfx') !== '0'; } catch (e) {}
+const CHORDS = [[41, 57, 60, 64, 67], [40, 55, 59, 62, 66], [38, 53, 57, 60, 64], [36, 52, 55, 59, 62]], SCALE_M = [67, 69, 72, 74, 76, 79, 81, 84]; // Fmaj9, Em9, Dm9, Cmaj9 (bass note first); C pentatonic for the melody
+function audioStart() {
+  if (A.ctx) { A.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  let c; try { c = A.ctx = new AC(); } catch (e) { return; }
+  const gain = (v, to) => { const g = c.createGain(); g.gain.value = v; if (to) g.connect(to); return g; }, lp = (f, to) => { const b = c.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = f; if (to) b.connect(to); return b; };
+  A.master = gain(.9, c.destination); A.musicBus = gain(0, A.master); A.sfxBus = gain(0, A.master);
+  const len = Math.floor(c.sampleRate * 2.8), ir = c.createBuffer(2, len, c.sampleRate); // reverb: a burst of decaying noise
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.8; }
+  A.verb = c.createConvolver(); A.verb.buffer = ir; A.verb.connect(gain(.55, A.master)); A.musicBus.connect(gain(.5, A.verb)); A.sfxBus.connect(gain(.35, A.verb));
+  A.pad = lp(780, A.musicBus); A.drums = lp(2600, A.musicBus); A.lead = gain(1, A.musicBus); // warm, dull filters are most of the lofi sound
+  A.echo = c.createDelay(1.5); A.echo.delayTime.value = 60 / BPM * .75; const fb = lp(1700); A.echo.connect(fb); fb.connect(gain(.38, A.echo)); fb.connect(A.musicBus); A.lead.connect(gain(.5, A.echo));
+  A.wob = c.createOscillator(); A.wob.frequency.value = .27; A.wobG = gain(7); A.wob.connect(A.wobG); A.wob.start(); // slow pitch wobble, like a tired tape
+  A.noise = c.createBuffer(1, c.sampleRate, c.sampleRate); const nd = A.noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const hiss = c.createBufferSource(), hb = c.createBiquadFilter(); hiss.buffer = A.noise; hiss.loop = true; hb.type = 'bandpass'; hb.frequency.value = 3200; hb.Q.value = .4; hiss.connect(hb); hb.connect(gain(.012, A.musicBus)); hiss.start(); // faint tape hiss
+  audioPrefs(); A.nextT = c.currentTime + .2; setInterval(schedule, 90);
+}
+function audioPrefs() {
+  for (const [id, on] of [['a-music', A.music], ['a-sfx', A.sfx]]) $(id).setAttribute('aria-pressed', on);
+  if (A.ctx) { const t = A.ctx.currentTime; A.musicBus.gain.setTargetAtTime(A.music ? .6 : 0, t, .4); A.sfxBus.gain.setTargetAtTime(A.sfx ? .55 : 0, t, .03); }
+  try { localStorage.setItem('ol-music', A.music ? '1' : '0'); localStorage.setItem('ol-sfx', A.sfx ? '1' : '0'); } catch (e) {}
+}
+function note(m, t, o) { // one enveloped oscillator
+  const c = A.ctx, osc = c.createOscillator(), v = c.createGain(), a = o.a || .008; osc.type = o.type || 'sine'; osc.frequency.value = mtof(m); if (o.det) osc.detune.value = o.det; if (o.wob) A.wobG.connect(osc.detune);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(o.g, t + a);
+  if (o.hold) { v.gain.setValueAtTime(o.g, t + a + o.hold); v.gain.linearRampToValueAtTime(0, t + a + o.hold + o.d); } else v.gain.exponentialRampToValueAtTime(.0001, t + a + o.d);
+  osc.connect(v); v.connect(o.to); osc.start(t); osc.stop(t + a + (o.hold || 0) + o.d + .05);
+}
+function hit(t, f, q, g, d, type) { // one filtered burst of noise, for hats and the rim
+  const c = A.ctx, src = c.createBufferSource(), b = c.createBiquadFilter(), v = c.createGain(); src.buffer = A.noise; b.type = type; b.frequency.value = f; b.Q.value = q;
+  v.gain.setValueAtTime(g, t); v.gain.exponentialRampToValueAtTime(.0001, t + d); src.connect(b); b.connect(v); v.connect(A.drums); src.start(t, Math.random() * .5, d + .05);
+}
+function schedule() { // lofi loop at 72 bpm: a chord every two bars, soft kick and rim, brushed hats, and a sparse wandering melody
+  const c = A.ctx; if (!c) return;
+  if (c.state !== 'running') { if (!document.hidden) { if (LOG.run && !A.wasDown) LOG.run.audioDrops++; A.wasDown = true; c.resume().catch(() => {}); } return; } A.wasDown = false; // the browser can pause audio on its own; ask for it back
+  if (!A.music) { A.nextT = c.currentTime + .2; return; }
+  const e8 = 60 / BPM / 2; if (A.nextT < c.currentTime) A.nextT = c.currentTime + .05;
+  while (A.nextT < c.currentTime + 1.5) { /* scheduled well ahead, so a busy or throttled page never leaves a gap */ const i = A.step % 16, bar = Math.floor(A.step / 16), ch = CHORDS[bar % 4], t = A.nextT + (i % 2 ? .035 : 0); // a little swing on the off-beats
+    if (i === 0) { for (const m of ch.slice(1)) for (const det of [-7, 7]) note(m, t, { type: 'triangle', det, wob: true, a: 1.3, hold: e8 * 16 - 1.6, d: 2.4, g: .05, to: A.pad });
+      A.phrase = Math.random() < .7; }
+    if (i === 0 || i === 8) note(ch[0], t, { type: 'sine', a: .02, d: 1.5, g: .2, to: A.pad });
+    if (i === 0 || i === 8 || (i === 11 && bar % 2)) { const k = c.createOscillator(), v = c.createGain(); k.frequency.setValueAtTime(95, t); k.frequency.exponentialRampToValueAtTime(42, t + .16); // soft kick
+      v.gain.setValueAtTime(.34, t); v.gain.exponentialRampToValueAtTime(.0001, t + .3); k.connect(v); v.connect(A.drums); k.start(t); k.stop(t + .35); }
+    if (i === 4 || i === 12) hit(t, 1500, 1.2, .1, .11, 'bandpass');
+    hit(t, 7000, .7, i % 2 ? .016 : .03, .045, 'highpass');
+    if (A.phrase && Math.random() < (i % 2 ? .16 : .3)) { A.mel = Math.max(0, Math.min(SCALE_M.length - 1, A.mel + pick([-2, -1, -1, 1, 1, 2])));
+      note(SCALE_M[A.mel], t, { type: 'sine', d: .9, g: .075, to: A.lead }); note(SCALE_M[A.mel] + 12, t, { type: 'triangle', d: .35, g: .012, to: A.lead }); }
+    A.step++; A.nextT += e8; }
+}
+function sfx(name, arg) { // short, soft interface sounds; skipped while a test is fast-forwarding the simulation
+  const c = A.ctx; if (!c || !A.sfx || manual || c.state !== 'running') return; const t = c.currentTime; if (t - (A.last[name] || -9) < (name === 'deliver' ? .07 : .2)) return; A.last[name] = t;
+  const n = (m, at, d, g, type) => note(m, t + at, { type: type || 'sine', d, g, to: A.sfxBus });
+  if (name === 'deliver') n([72, 76, 79, 81, 84][arg % 5], 0, .4, .1);
+  else if (name === 'route') [67, 72, 76].forEach((m, i) => n(m, i * .08, .35, .12, 'triangle'));
+  else if (name === 'buy') { n(64, 0, .2, .12, 'triangle'); n(71, .07, .3, .12, 'triangle'); }
+  else if (name === 'join') [60, 67, 72, 76, 79].forEach((m, i) => n(m, i * .11, 1, .1));
+  else if (name === 'warn') { n(57, 0, .5, .14, 'triangle'); n(53, .24, .7, .14, 'triangle'); }
+  else if (name === 'event') [74, 69, 74].forEach((m, i) => n(m, i * .15, .5, .1));
+  else if (name === 'over') [67, 64, 60, 55, 48].forEach((m, i) => n(m, i * .3, 1.6, .13, 'triangle'));
+}
+$('a-music').addEventListener('click', () => { A.music = !A.music; audioStart(); audioPrefs(); });
+$('a-sfx').addEventListener('click', () => { A.sfx = !A.sfx; audioStart(); audioPrefs(); });
+document.addEventListener('visibilitychange', () => { if (A.ctx) { if (document.hidden) A.ctx.suspend(); else A.ctx.resume().catch(() => {}); } });
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { if (A.ctx && A.ctx.state !== 'running') A.ctx.resume().catch(() => {}); }, true); // any input wakes paused audio
+audioPrefs();
+
+/* ---------- run log: each run's pacing is saved to this page's own database, so difficulty can be tuned from real play ---------- */
+const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30 };
+if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
+function logStart() {
+  LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
+  LOG.run = { version: 21, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+    routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
+}
+function logSample() {
+  const tot = G.planets.map(totalOrders);
+  LOG.run.timeline.push({ t: Math.round(G.t), worlds: G.planets.length, routes: G.routes.length, routesIdle: G.routes.filter(r => !shipsOn(r).length || !trades(r)).length, freighters: G.ships.length, reserve: G.reserve,
+    credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
+    worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1) });
+}
+function logSave() {
+  const r = LOG.run; if (!LOG.db || !r || manual) return; if (LOG.busy) { LOG.dirty = true; return; } LOG.busy = true;
+  r.seconds = Math.round(G.t); r.delivered = G.delivered; r.earned = G.earned; r.music = A.music; r.soundEffects = A.sfx; r.saved = new Date().toISOString();
+  LOG.db.doc('runs/' + LOG.id).set(JSON.parse(JSON.stringify(r))).catch(() => {}).then(() => { LOG.busy = false; if (LOG.dirty) { LOG.dirty = false; logSave(); } });
+}
+function logTick(dt) { // called every frame of a live run
+  const r = LOG.run; if (!r || r.ended || manual) return; r.realSecondsAtSpeed[speed ? 'x' + speed : 'paused'] += dt;
+  if (G.t >= LOG.next) { LOG.next += 30; logSample(); if (r.timeline.length % 2 === 0) logSave(); }
+}
+function logEnd() { // what the collapsing world was short of, and whether routes, freighters or stock were the missing piece
+  const r = LOG.run, p = G.over; if (!r || !p) return; r.ended = true;
+  r.collapse = { world: p.name, size: SIZE_NAME[p.size], joinedAt: Math.round(p.born), goods: p.wants.filter(g => ordersOf(p, g)).map(g => {
+    const rs = G.routes.filter(q => q.stops.includes(p) && q.stops.some(z => z !== p && z.good === g)), sellers = [...new Set(rs.flatMap(q => q.stops.filter(z => z !== p && z.good === g)))];
+    return { good: GOODS[g], orders: ordersOf(p, g), onTheWay: resOf(p, g), routesToASeller: rs.length, freightersOnThem: rs.reduce((n, q) => n + shipsOn(q).length, 0), stockAtThoseSellers: sellers.reduce((n, z) => n + z.stock, 0),
+      crunchAtSeller: !!(G.crunch && sellers.includes(G.crunch.p)), surgeHere: !!(G.rush && G.rush.p === p && G.rush.g === g) }; }) };
+  logSample(); logSave();
+}
+const logEvent = (kind, world) => { if (LOG.run && !manual) LOG.run.events.push({ t: Math.round(G.t), kind, world }); };
+
+let last = performance.now(), manual = false;
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (started && !G.over && !manual) { for (let i = 0; i < speed; i++) step(dt); logTick(dt); }
+  aimCamera(false); render(); syncHud(); requestAnimationFrame(frame);
+}
+function begin() { audioStart(); newGame(); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; setSpeed(1); aimCamera(true); }
+$('start').addEventListener('click', begin); $('again').addEventListener('click', begin);
+try { const b = +localStorage.getItem('ol-best'); if (b) $('best').textContent = `Best run: ${b} delivered.`; } catch (e) {}
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
+newGame(); resize(); aimCamera(true); requestAnimationFrame(frame);
+window.__ol = { get G() { return G; }, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };
+})();
+</script>

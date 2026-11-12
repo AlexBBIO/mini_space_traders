@@ -227,7 +227,7 @@ const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL
 /* Everything is counted in units, and every unit can be seen. A world's level (1 to 3) is how many units of its good it makes: it is drawn that
    size, with that many glyphs on it. Each glyph in a world's BUYS tag is one unit it wants. One unit made covers one unit wanted, with a little to
    spare (RHO). So supply and demand can be balanced by counting glyphs. */
-const out = p => p.level * UNIT, unitsOf = (p, g) => Math.max(1, Math.round(p.rate[g] / WANT)), shuffle = a => a.sort(() => Math.random() - .5);
+const NEW_T = 30, out = p => p.level * UNIT, unitsOf = (p, g) => Math.max(1, Math.round(p.rate[g] / WANT)), shuffle = a => a.sort(() => Math.random() - .5);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const r5 = v => Math.round(v / 5) * 5;
@@ -264,7 +264,7 @@ function makeGalaxy() { // every world in the galaxy exists from the start, scat
   spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
     if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
     used[good]++;
-    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, level: 1, grewAt: -9, w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
+    G.dormant.push({ id: G.nextId++, name: nameIt(), r: sp.r, ang: sp.ang, level: 1, grewAt: -99, news: [], w: orbW(sp.r), good, stock: 0, depot: false, items: [], purgeT: 4, accS: 0,
       over: 0, born: 0, wants: [], rate: {}, accD: {}, orders: {}, res: {}, x: sp.x, y: sp.y }); });
   for (let i = 0; i < 4; i++) { G.dormant[0].level = 2; activate(G.dormant[0]); } // the player starts with the home world and its three nearest neighbours, each making two units
   shuffle(G.planets.slice()).forEach((p, i) => { for (let k = i < 2 ? 2 : 1; k > 0; k--) { const g = spareFor(p); if (g != null) buyUnit(p, g); } }); // they buy six of those eight units: SPARE is left over for whoever joins next
@@ -305,7 +305,7 @@ function spareFor(p) { // the good p should buy its next unit of: whichever othe
 }
 function buyUnit(p, g) { // p wants one more unit of g from now on
   const more = p.wants.includes(g); if (!more) { p.wants.push(g); p.rate[g] = 0; p.accD[g] = rnd(-.2, .5); }
-  p.rate[g] += WANT; G.pool[g]--; if (started && G.t - p.born > 1) G.floats.push({ p, text: more ? 'wants more ' : 'now buys ', g, t: -1.5 });
+  p.rate[g] += WANT; G.pool[g]--; if (started && G.t - p.born > 1) { G.floats.push({ p, text: more ? 'wants more ' : 'now buys ', g, t: -1.5 }); p.news.push({ g, k: unitsOf(p, g) - 1, t: G.t, more }); } // news: the new unit is pointed out on the map for a while
 }
 function grow() { // one world goes up a level
   for (const p of shuffle(G.planets.filter(p => p.level < MAX_LEVEL && G.t - p.born > 40))) {
@@ -697,6 +697,11 @@ function render() {
       ctx.fillStyle = C.g[G.rush.g]; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('PAYS ×2', x, y - P - 28); }
     if (G.crunch && G.crunch.p === p) { ctx.strokeStyle = C.danger; ctx.lineWidth = 2; ctx.setLineDash([2, 5]); ctx.beginPath(); ctx.arc(x, y, P + 19 + Math.sin(G.t * 4) * 1.5, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = C.danger; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OUTPUT DOWN', x, y - P - 28); }
+    p.news = p.news.filter(n => G.t - n.t < NEW_T); const nw = p.news[p.news.length - 1];
+    if (nw) { const left = Math.min(1, (NEW_T - (G.t - nw.t)) / 3), busy = (G.rush && G.rush.p === p) || (G.crunch && G.crunch.p === p); ctx.strokeStyle = ctx.fillStyle = C.g[nw.g]; // a change in what it wants: rings in that good's colour and a label, for half a minute
+      for (let i = 0; i < 2; i++) { const ph = (performance.now() / 1500 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * .9 * left; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, P + 5 + ph * 30, 0, 6.2832); ctx.stroke(); }
+      ctx.globalAlpha = left; ctx.font = '700 10px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const txt = nw.more ? 'WANTS MORE' : 'NOW BUYS', w = ctx.measureText(txt).width, ly = y - P - (busy ? 41 : 28);
+      ctx.fillText(txt, x - 7, ly); glyph(nw.g, x + w / 2 + 1, ly - .5, 4); ctx.globalAlpha = 1; }
     ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(x, y, R + 2.5, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.bg; // one glyph on the world for each unit it makes
@@ -721,7 +726,9 @@ function render() {
     if (p.wants.length) { ctx.fillStyle = C.bg; ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(px, py, pw, 17, 8.5); ctx.fill(); ctx.stroke(); } // a world that buys nothing yet has no tag
     ctx.fillStyle = C.muted; if (tw > 0 && p.wants.length) ctx.fillText('BUYS', px + 7, py + 9);
     let slot = px + tw + 10; p.wants.forEach(g => { const u = unitsOf(p, g), gx = slot + 2 + 5 * u; ctx.strokeStyle = C.g[g]; // one glyph in the tag for each unit wanted; orders stack under the middle of them
-      for (let k = 0; k < u; k++) glyph(g, slot + 7 + 10 * k, py + 8.5, 4.2, true); slot += 4 + 10 * u;
+      for (let k = 0; k < u; k++) { const cx = slot + 7 + 10 * k, fresh = p.news.some(n => n.g === g && n.k === k);
+        if (fresh) { ctx.fillStyle = C.g[g]; ctx.globalAlpha = .65 + .35 * Math.sin(performance.now() / 160); ctx.beginPath(); ctx.arc(cx, py + 8.5, 7.5, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1; ctx.fillStyle = C.bg; glyph(g, cx, py + 8.5, 4.2); } // the new unit: a solid, blinking disc
+        else glyph(g, cx, py + 8.5, 4.2, true); } slot += 4 + 10 * u;
       for (let k = 0; k < ordersOf(p, g); k++) { const oy = py + 25 + k * 9.5; ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(gx, oy, 5.5, 0, 6.2832); ctx.fill();
         if (k < resOf(p, g)) { ctx.globalAlpha = .45; ctx.fillStyle = C.g[g]; glyph(g, gx, oy, 3.4); ctx.globalAlpha = 1; } // tinted: a unit is on its way
         ctx.strokeStyle = C.g[g]; glyph(g, gx, oy, 3.4, true); } });
@@ -735,7 +742,7 @@ function render() {
     ctx.restore();
   }
   for (const p of G.planets) { // when zoomed in, a marker at the screen edge points to any off-screen world that is new or in trouble
-    const x = sx(p.x), y = sy(p.y); if ((x > 0 && x < viewRight && y > viewTop - 8 && y < viewBot) || !(p.over > 0 || G.t - p.born < 12)) continue;
+    const x = sx(p.x), y = sy(p.y); if ((x > 0 && x < viewRight && y > viewTop - 8 && y < viewBot) || !(p.over > 0 || G.t - p.born < 12 || p.news.length)) continue;
     const ex = Math.max(26, Math.min(viewRight - 26, x)), ey = Math.max(viewTop + 16, Math.min(viewBot - 16, y)), a = Math.atan2(y - ey, x - ex), col = p.over > 0 ? C.danger : C.ink;
     ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(ex, ey, 14, 0, 6.2832); ctx.fill(); ctx.fillStyle = C.g[p.good]; ctx.beginPath(); ctx.arc(ex, ey, 9.5, 0, 6.2832); ctx.fill();
     ctx.fillStyle = C.bg; glyph(p.good, ex, ey, 4); ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(ex, ey, 12.5, 0, 6.2832); ctx.stroke();

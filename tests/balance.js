@@ -8,7 +8,7 @@ const path = require('path');
   await pg.setContent('<!doctype html><html><head><meta charset="utf-8"></head><style>[hidden]{display:none!important}</style><body style="margin:0">' + html + '</body></html>');
   await pg.click('#start');
   for (let run = 0; run < 6; run++) {
-    const out = await pg.evaluate(() => { document.getElementById('start').click(); __ol.manual = true; const o = __ol, G = o.G, rows = [], OUT = [.7, 1, 1.4], APP = [1, 1.6, 2.4];
+    const out = await pg.evaluate(() => { document.getElementById('start').click(); __ol.manual = true; const o = __ol, G = o.G, rows = [], OUT = [1, 1, 1], APP = [1, 1.6, 2.4];
       const snap = sec => { const goods = [0, 1, 2, 3, 4].filter(g => G.planets.some(p => p.good === g));
         rows.push(`t${sec} worlds${G.planets.length} | ` + goods.map(g => { const sup = G.planets.reduce((n, p) => n + (p.good === g ? OUT[p.size] : 0), 0), dem = G.planets.reduce((n, p) => n + (p.rate[g] || 0), 0);
           return `g${g} supply${sup.toFixed(1)} demand${dem.toFixed(2)} (${(dem / sup * 100).toFixed(0)}%) buyers${G.planets.filter(p => p.wants.includes(g)).length}`; }).join(' ; ')

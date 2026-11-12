@@ -7,7 +7,7 @@ const zset = new Map(), counters = new Map(); // member -> score
 const sorted = () => [...zset.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1));
 const realFetch = global.fetch;
 global.fetch = async (url, opt) => {
-  if (!String(url).startsWith('http://redis.test')) return realFetch(url, opt);
+  if (!/^https?:\/\/redis\.test/.test(String(url))) return realFetch(url, opt);
   if (opt.headers.authorization !== 'Bearer test-token') return { ok: false, status: 401, json: async () => ({}) };
   const out = JSON.parse(opt.body).map(([cmd, key, ...a]) => {
     if (cmd === 'ZADD') { zset.set(a[1], +a[0]); return { result: 1 }; }
@@ -16,13 +16,14 @@ global.fetch = async (url, opt) => {
     if (cmd === 'ZREMRANGEBYRANK') { const asc = sorted().reverse(), n = asc.length, from = a[0] < 0 ? n + a[0] : a[0], to = a[1] < 0 ? n + a[1] : a[1]; asc.slice(from, to + 1).forEach(([m]) => zset.delete(m)); return { result: 0 }; }
     if (cmd === 'INCR') { counters.set(key, (counters.get(key) || 0) + 1); return { result: counters.get(key) }; }
     if (cmd === 'EXPIRE') return { result: 1 };
+    if (cmd === 'PING') return { result: 'PONG' };
     return { error: 'unknown command ' + cmd };
   });
   return { ok: true, status: 200, json: async () => out };
 };
 const handler = require('../api/scores.js');
-const call = (method, body, ip) => new Promise(done => { const res = { code: 200, setHeader() {}, status(c) { this.code = c; return this; }, json(d) { done({ code: this.code, body: d }); } };
-  handler({ method, body, headers: { 'x-forwarded-for': ip || '1.1.1.1' } }, res); });
+const call = (method, body, ip, url) => new Promise(done => { const res = { code: 200, setHeader() {}, status(c) { this.code = c; return this; }, json(d) { done({ code: this.code, body: d }); } };
+  handler({ method, body, url: url || '/api/scores', headers: { 'x-forwarded-for': ip || '1.1.1.1' } }, res); });
 
 (async () => {
   const checks = [], ok = (name, pass) => checks.push((pass ? 'pass ' : 'FAIL ') + name);
@@ -37,10 +38,20 @@ const call = (method, body, ip) => new Promise(done => { const res = { code: 200
   let last; for (let i = 0; i < 8; i++) last = await call('POST', { name: 'Spam' + i, delivered: 5, seconds: 60 }, '9.9.9.9');
   ok('limits one address to six posts a minute', last.code === 429);
 
+  // the database's variables can arrive under another prefix, or not at all
+  const saved = { u: process.env.KV_REST_API_URL, t: process.env.KV_REST_API_TOKEN }; delete process.env.KV_REST_API_URL; delete process.env.KV_REST_API_TOKEN;
+  ok('answers 503 with no database variables', (await call('GET')).code === 503);
+  const d0 = (await call('GET', undefined, undefined, '/api/scores?debug=1')).body; ok('debug reports nothing configured', d0.configured === false && d0.using === null);
+  process.env.STORAGE_KV_REST_API_URL = 'http://redis.test'.replace('http:', 'https:'); process.env.STORAGE_KV_REST_API_TOKEN = 'test-token'; process.env.STORAGE_KV_REST_API_READ_ONLY_TOKEN = 'nope';
+  const d1 = (await call('GET', undefined, undefined, '/api/scores?debug=1')).body;
+  ok('finds the variables under a custom prefix', d1.configured && d1.using.join() === 'STORAGE_KV_REST_API_URL,STORAGE_KV_REST_API_TOKEN' && d1.storeReachable === true && !JSON.stringify(d1).includes('test-token'));
+  ok('serves the board through them', (await call('GET')).body.top.length > 0);
+  delete process.env.STORAGE_KV_REST_API_URL; delete process.env.STORAGE_KV_REST_API_TOKEN; delete process.env.STORAGE_KV_REST_API_READ_ONLY_TOKEN; process.env.KV_REST_API_URL = saved.u; process.env.KV_REST_API_TOKEN = saved.t;
+
   // the game itself, served with the API beside it
   const srv = http.createServer((req, res) => {
     if (req.url.startsWith('/api/scores')) { let raw = ''; req.on('data', d => raw += d); req.on('end', () => { const r = { setHeader() {}, code: 200, status(c) { this.code = c; return this; }, json(d) { res.writeHead(this.code, { 'content-type': 'application/json' }); res.end(JSON.stringify(d)); } };
-        handler({ method: req.method, body: raw ? JSON.parse(raw) : undefined, headers: { 'x-forwarded-for': '2.2.2.2' } }, r); }); return; }
+        handler({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : undefined, headers: { 'x-forwarded-for': '2.2.2.2' } }, r); }); return; }
     res.writeHead(200, { 'content-type': 'text/html' }); res.end(fs.readFileSync(path.join(__dirname, '..', 'index.html')));
   }).listen(0);
   const br = await chromium.launch(), pg = await br.newPage({ viewport: { width: 1200, height: 800 } }), errs = []; pg.on('pageerror', e => errs.push(e.message));

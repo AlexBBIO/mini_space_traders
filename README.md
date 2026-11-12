@@ -25,7 +25,8 @@ Every push to `main` redeploys. Until step 2 is done the game works and the lead
 
 After a run collapses, the player can enter a name and post the run. On the hosted site this uses the scores API below; opened as a Claude artifact it uses the artifact's own database; opened from disk it is hidden. The board ranks runs by units delivered and shows the top ten, with the top five on the start screen.
 
-- `api/scores.js` stores scores in a Redis sorted set through the Upstash REST API. It reads `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`), which the Vercel integration sets.
+- `api/scores.js` stores scores in a Redis sorted set through the Upstash REST API. It reads `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or any pair of variables ending in `REST_API_URL` / `REST_URL` and `REST_API_TOKEN` / `REST_TOKEN`, so a custom prefix chosen when connecting the database works too.
+- If the board says it is not set up, open `/api/scores?debug=1` on the site. It lists the names of the database variables the project has (never their values) and whether the store answers.
 - Names are cut to 16 characters and stripped of angle brackets and control characters. There is no profanity filter.
 - One address can post six scores a minute. The board keeps the best 500 runs.
 - Scores are reported by the player's browser. The API rejects impossible ones, but a determined person can still post a fake score.

@@ -1,11 +1,18 @@
 // Leaderboard for the hosted game. GET returns the top runs; POST adds one.
 // Scores live in a Redis sorted set reached over the Upstash REST API, using the environment variables that
-// Vercel's Upstash integration sets on the project. Without them the endpoint answers 503 and the game hides the board.
-const BASE = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL, TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+// Vercel's Upstash integration sets on the project. Without them the endpoint answers 503 and the game says so.
+// GET /api/scores?debug=1 reports which variables it found (names only, never values), for diagnosing a missing board.
+function findStore() { // the integration's variable names depend on the prefix chosen when the database was connected, so look for any REST url and token pair
+  const env = process.env, keys = Object.keys(env);
+  const urlKey = ['KV_REST_API_URL', 'UPSTASH_REDIS_REST_URL'].find(k => env[k]) || keys.find(k => /REST(_API)?_URL$/.test(k) && /^https:\/\//.test(env[k]));
+  if (!urlKey) return null;
+  const tokenKey = [urlKey.replace(/URL$/, 'TOKEN')].find(k => env[k]) || keys.find(k => /REST(_API)?_TOKEN$/.test(k) && !/READ_ONLY/.test(k) && env[k]);
+  return tokenKey ? { url: env[urlKey], token: env[tokenKey], urlKey, tokenKey } : null;
+}
 const KEY = 'orbit-lanes:scores', KEEP = 500, SHOW = 20;
 
 async function redis(cmds) {
-  const r = await fetch(BASE.replace(/\/$/, '') + '/pipeline', { method: 'POST', headers: { authorization: 'Bearer ' + TOKEN, 'content-type': 'application/json' }, body: JSON.stringify(cmds) });
+  const st = findStore(), r = await fetch(st.url.replace(/\/$/, '') + '/pipeline', { method: 'POST', headers: { authorization: 'Bearer ' + st.token, 'content-type': 'application/json' }, body: JSON.stringify(cmds) });
   if (!r.ok) throw new Error('store answered ' + r.status);
   const out = await r.json(); for (const o of out) if (o.error) throw new Error(o.error);
   return out.map(o => o.result);
@@ -19,7 +26,13 @@ const clean = name => String(name == null ? '' : name).replace(/[\u0000-\u001f\u
 
 module.exports = async (req, res) => {
   res.setHeader('cache-control', 'no-store');
-  if (!BASE || !TOKEN) return res.status(503).json({ error: 'The leaderboard is not set up yet.' });
+  const store = findStore();
+  if (req.method === 'GET' && /[?&]debug=1/.test(req.url || '')) { // names only: enough to see what the project was given, without exposing anything secret
+    const related = Object.keys(process.env).filter(k => /KV|REDIS|UPSTASH/i.test(k)).sort(); let reachable = null;
+    if (store) { try { await redis([['PING']]); reachable = true; } catch (e) { reachable = false; } }
+    return res.status(200).json({ configured: !!store, using: store ? [store.urlKey, store.tokenKey] : null, storeReachable: reachable, relatedVariableNames: related });
+  }
+  if (!store) return res.status(503).json({ error: 'The leaderboard is not set up yet.' });
   try {
     if (req.method === 'GET') { const [flat] = await redis([['ZREVRANGE', KEY, 0, SHOW - 1, 'WITHSCORES']]); return res.status(200).json({ top: rows(flat) }); }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Use GET or POST.' });

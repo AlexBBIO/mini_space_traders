@@ -243,15 +243,17 @@ function newGame() {
   makeGalaxy(); balanceDemand();
   for (const p of G.planets) { p.accS = 1; p.wants.forEach((g, i) => p.accD[g] = i ? rnd(.4, .9) : rnd(.9, .99)); } // no slow start: every world has a unit ready and places its first order within a few seconds
 }
-function makeGalaxy() { // every world in the galaxy exists from the start, strung along three spiral arms; most are dormant until the network reaches them
+function makeGalaxy() { // every world in the galaxy exists from the start, scattered over a disc with three spiral arms; most are dormant until the network reaches them
   const spots = [], xy = (r, a) => [Math.cos(a) * r, Math.sin(a) * r], twist = rnd(0, 6.2832), ARMS = 3, WIND = 2.5;
   const add = (r, a, gap) => { const [x, y] = xy(r, a); if (spots.every(q => Math.hypot(x - q.x, y - q.y) > gap)) { spots.push({ r, ang: a, x, y }); return true; } return false; };
-  for (let arm = 0; arm < ARMS; arm++) for (let k = 0; k < 13; k++) { const t = k / 12; add(300 + t * 800 + rnd(-40, 40), twist + arm * 6.2832 / ARMS + t * WIND + rnd(-.15, .15), 180); }
-  for (let tries = 0, n = 0; tries < 400 && n < 9; tries++) if (add(rnd(320, GAL_R - 40), rnd(0, 6.2832), 240)) n++; // a few worlds out between the arms
+  for (let tries = 0; tries < 3000 && spots.length < 64; tries++) { // scattered across the disc, thicker along the arms, so any patch of it is a cluster of neighbours and not a single file
+    const t = Math.random(), r = 300 + t * 810; add(r, Math.random() < .65 ? twist + (tries % ARMS) * 6.2832 / ARMS + t * WIND + rnd(-.5, .5) : rnd(0, 6.2832), 230); }
   for (let i = 0; i < 1100; i++) { const r = 230 + Math.random() * 930, a = twist + (i % ARMS) * 6.2832 / ARMS + (r - 300) / 800 * WIND + rnd(-.2, .2) + rnd(-.14, .14);
     G.dust.push({ r, ang: a, w: orbW(r), a: rnd(.25, .8), s: Math.random() < .25 ? 2.5 : 1.5 }); }
   const home = spots.slice().sort((p, q) => Math.abs(p.r - 600) - Math.abs(q.r - 600))[0];
-  spots.sort((p, q) => Math.hypot(p.x - home.x, p.y - home.y) - Math.hypot(q.x - home.x, q.y - home.y)); // roughly the order the network will reach them
+  { const left = spots.filter(p => p !== home), order = [home]; let cx = home.x, cy = home.y; // roughly the order the network will reach them: always the world nearest the middle of those already in
+    while (left.length) { left.sort((p, q) => Math.hypot(p.x - cx, p.y - cy) - Math.hypot(q.x - cx, q.y - cy)); const p = left.shift(); order.push(p); cx += (p.x - cx) / order.length; cy += (p.y - cy) / order.length; }
+    spots.splice(0, spots.length, ...order); }
   const mix = a => a.sort(() => Math.random() - .5), g0 = mix([0, 1, 2, 3]), s0 = mix([0, 1, 1, 2]), used = [0, 0, 0, 0, 0];
   spots.forEach((sp, i) => { let good; // goods are dealt out evenly along that order, with Fuel first appearing a little way out
     if (i < 4) good = g0[i]; else if (i === 6) good = 4; else { const n = i < 6 ? 4 : 5, mn = Math.min(...used.slice(0, n)); good = pick(used.slice(0, n).map((c, g) => c === mn ? g : -1).filter(g => g >= 0)); }
@@ -265,8 +267,9 @@ function makeGalaxy() { // every world in the galaxy exists from the start, stru
 function activate(p) { // a dormant world joins the network: its output adds matching demand to the ledger
   G.dormant.splice(G.dormant.indexOf(p), 1); p.born = G.t; p.accS = rnd(.3, .8); G.planets.push(p); G.active = Math.max(G.active, p.good + 1); G.pending[p.good] += RHO * OUT[p.size];
 }
-function nextWorld() { // the dormant world closest to the network is the next to wake
-  let best = null, bd = Infinity; for (const d of G.dormant) { let m = Infinity; for (const p of G.planets) m = Math.min(m, Math.hypot(p.x - d.x, p.y - d.y)); if (m < bd) { bd = m; best = d; } } return best;
+function nextWorld() { // the dormant world nearest the middle of the network wakes next, so the network grows as a cluster and not a chain
+  const n = G.planets.length, cx = G.planets.reduce((s, p) => s + p.x, 0) / n, cy = G.planets.reduce((s, p) => s + p.y, 0) / n;
+  let best = null, bd = Infinity; for (const d of G.dormant) { const m = Math.hypot(d.x - cx, d.y - cy); if (m < bd) { bd = m; best = d; } } return best;
 }
 function place(p) { p.x = Math.cos(p.ang) * p.r; p.y = Math.sin(p.ang) * p.r; }
 function nameIt() {
@@ -323,7 +326,7 @@ const relays = (r, g, at) => r.stops.some(e => e.depot && e !== at && onward(e, 
 const trades = r => r.stops.some(a => buysOn(r, a.good, a) || relays(r, a.good, a))
   || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d)) && GOODS.some((_, g) => g < G.active && (buysOn(r, g, d) || relays(r, g, d))));
 function awaken() {
-  const p = nextWorld(); if (!p) return; activate(p);
+  const p = G.dormant.includes(G.next) ? G.next : nextWorld(); if (!p) return; activate(p); // the one the map has been pointing at
   balanceDemand(); // the newcomer's output finds buyers, and it takes on a share of the network's demand
   G.next = G.planets.length < MAXP ? nextWorld() : null;
   sfx('join'); logEvent('joined: ' + SIZE_NAME[p.size] + ' ' + GOODS[p.good], p.name);

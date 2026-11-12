@@ -72,6 +72,7 @@ The scripts in `tests/` need [Playwright](https://playwright.dev) (`npm i playwr
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |
 | `tests/depot.js` | A depot world as a hub: one route in, another out to a buyer the first route never visits. |
 | `tests/leaderboard.js` | Checks the scores API rules against a stand-in store, then posts a score through the game's own form. |
+| `tests/shape.js` | Measures how clustered the network is as it grows (1 = a round blob, 3 or more = a line). |
 
 The bot is a floor for difficulty, not a measure of how the game feels.
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}html{box-sizing:border-box}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:dark;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}html{box-sizing:border-box}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
 <title>Orbit Lanes</title>
@@ -11,21 +11,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap">
 <style>
 /* Layout: one full-screen star chart (canvas) with a thin stat strip on top and a trader's dock along the bottom. */
-:root {
-  --bg: #E6ECEF; --panel: rgba(246, 249, 250, .9); --ink: #17283A; --muted: #62768A; --line: #C3CFD7; --lane: #8FA2B1;
-  --star: #F0A92B; --danger: #D93A2F;
-  --g0: #D8742A; --g1: #2B82C9; --g2: #4F9A3C; --g3: #8457C6; --g4: #C4459A;
+:root { /* one theme: it is space, so it is dark */
+  --bg: #0E1620; --panel: rgba(22, 32, 45, .9); --ink: #E4ECF3; --muted: #8799AA; --line: #263544; --lane: #52677A;
+  --star: #F7C456; --danger: #FF6A5C;
+  --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark;
   --display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
   --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0E1620; --panel: rgba(22, 32, 45, .9); --ink: #E4ECF3; --muted: #8799AA; --line: #263544; --lane: #52677A;
-  --star: #F7C456; --danger: #FF6A5C;
-  --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #0E1620; --panel: rgba(22, 32, 45, .9); --ink: #E4ECF3; --muted: #8799AA; --line: #263544; --lane: #52677A;
-  --star: #F7C456; --danger: #FF6A5C;
-  --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark }
 
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; overflow: hidden; }
@@ -1027,8 +1019,6 @@ $('lb-form').addEventListener('submit', e => {
 });
 lbLoad();
 readColors();
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
-new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 newGame(); resize(); aimCamera(true); requestAnimationFrame(frame);
 window.__ol = { get G() { return G; }, faced, reach, routeLive, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, set manual(v) { manual = v; } };

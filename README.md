@@ -12,6 +12,24 @@ Open `index.html` in a browser, or serve the folder:
 npx serve .
 ```
 
+## Put it online with Vercel
+
+The repository deploys as it is: `index.html` is a static page and `api/scores.js` is a serverless function. There is no build step.
+
+1. At [vercel.com/new](https://vercel.com/new), import this repository. Leave the framework preset on "Other" and the build settings empty, then deploy.
+2. For the leaderboard, open the project's **Storage** tab, create an **Upstash for Redis** database (the free plan is enough) and connect it to the project. Then redeploy.
+
+Every push to `main` redeploys. Until step 2 is done the game works and the leaderboard stays hidden.
+
+## Leaderboard
+
+After a run collapses, the player can enter a name and post the run. The board ranks runs by units delivered and shows the top ten, with the top five on the start screen.
+
+- `api/scores.js` stores scores in a Redis sorted set through the Upstash REST API. It reads `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`), which the Vercel integration sets.
+- Names are cut to 16 characters and stripped of angle brackets and control characters. There is no profanity filter.
+- One address can post six scores a minute. The board keeps the best 500 runs.
+- Scores are reported by the player's browser. The API rejects impossible ones, but a determined person can still post a fake score.
+
 ## How it works
 
 - **Worlds** each make one good and buy one to three others. Bigger worlds make more and order more.
@@ -30,6 +48,7 @@ npx serve .
 | `game.html` | The source: title, styles, markup and script, without the outer `<html>` wrapper. |
 | `index.html` | The playable page, built from `game.html`. |
 | `build.js` | Rebuilds `index.html` after editing `game.html`. |
+| `api/scores.js` | The leaderboard endpoint, run by Vercel as a serverless function. |
 | `tests/` | Playwright scripts used while developing. |
 
 After changing `game.html`:
@@ -50,6 +69,7 @@ The scripts in `tests/` need [Playwright](https://playwright.dev) (`npm i playwr
 | `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. |
 | `tests/audio.js` | Plays in real time with sound on and checks for errors. |
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |
+| `tests/leaderboard.js` | Checks the scores API rules against a stand-in store, then posts a score through the game's own form. |
 
 The bot is a floor for difficulty, not a measure of how the game feels.
 

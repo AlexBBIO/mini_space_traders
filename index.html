@@ -90,7 +90,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .panel .rm { padding: 0 10px; font-weight: 600; color: var(--danger); }
 .stepper button:disabled { opacity: .35; cursor: default; }
 
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 78%, transparent); }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto; background: color-mix(in srgb, var(--bg) 78%, transparent); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 22px; max-width: 440px; width: 100%; display: flex; flex-direction: column; gap: 14px; }
 .card h1 { font-family: var(--display); font-size: 28px; line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
 .card p { margin: 0; line-height: 1.5; }
@@ -99,6 +99,20 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .card li svg { margin-top: 3px; }
 .go { align-self: flex-start; background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 11px 22px; font-weight: 700; font-size: 15px; }
 .best { color: var(--muted); font-size: 13px; }
+.lb { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.lb small, .lb label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.lb ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-variant-numeric: tabular-nums; }
+.lb li { display: flex; justify-content: space-between; gap: 12px; }
+.lb li .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb li .v { color: var(--muted); white-space: nowrap; }
+.lb li.me { font-weight: 700; }
+.lb li.me .v { color: var(--ink); }
+.lb-row { display: flex; gap: 8px; margin-top: 6px; }
+.lb input { flex: 1; min-width: 0; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.lb input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.lb form button { border: 1px solid var(--ink); background: none; border-radius: 10px; padding: 0 14px; font-weight: 700; }
+.lb form button:disabled { opacity: .45; cursor: default; }
+#lb-msg { font-size: 13px; color: var(--muted); min-height: 1.2em; }
 .result { display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) {
   .dock { top: 62px; bottom: 0; left: auto; right: 0; width: 300px; box-sizing: border-box; align-items: stretch; justify-content: flex-start; gap: 12px; padding-left: 14px; padding-block: 4px 14px; overflow-y: auto; }
@@ -172,6 +186,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
       </ul>
       <button class="go" id="start">Start trading</button>
       <span class="best" id="best"></span>
+      <div class="lb" id="lb-intro" hidden><small>Top runs</small><ol></ol></div>
     </div>
   </div>
 
@@ -183,6 +198,12 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
         <span class="stat"><small>Survived</small><b id="o-time"></b></span>
         <span class="stat"><small>Delivered</small><b id="o-del"></b></span>
         <span class="stat"><small>Earned</small><b id="o-earn"></b></span>
+      </div>
+      <div class="lb" id="lb-over" hidden>
+        <form id="lb-form"><label for="lb-name">Add this run to the leaderboard</label>
+          <div class="lb-row"><input id="lb-name" maxlength="16" placeholder="Your name" autocomplete="nickname"><button id="lb-post" type="submit">Post</button></div>
+          <span id="lb-msg" aria-live="polite"></span></form>
+        <ol></ol>
       </div>
       <button class="go" id="again">New run</button>
       <span class="best" id="o-best"></span>
@@ -468,7 +489,7 @@ function extendRoute(r, add, atStart) {
 function endGame() {
   let best = 0; try { best = +localStorage.getItem('ol-best') || 0; } catch (e) {}
   const isBest = G.delivered > best; if (isBest) try { localStorage.setItem('ol-best', G.delivered); } catch (e) {}
-  sfx('over'); logEnd();
+  sfx('over'); logEnd(); lbReset();
   $('o-title').textContent = `Trade collapsed at ${G.over.name}`;
   $('o-text').textContent = `Its orders for ${G.over.wants.filter(g => ordersOf(G.over, g)).map(g => GOODS[g]).join(' and ')} went unfilled for too long.`;
   $('o-time').textContent = fmtT(G.t); $('o-del').textContent = G.delivered; $('o-earn').textContent = '◈' + G.earned;
@@ -689,7 +710,7 @@ $('buy-depot').addEventListener('click', () => { placing = !placing && G.credits
 function setSpeed(v) { if (v) lastSpeed = v; speed = v; for (let i = 0; i < 4; i++) $('sp' + i).setAttribute('aria-pressed', i === v); }
 for (let i = 0; i < 4; i++) $('sp' + i).addEventListener('click', () => setSpeed(i === 0 && speed === 0 ? lastSpeed : i));
 addEventListener('keydown', e => {
-  if (!started || e.target.tagName === 'BUTTON' && e.code === 'Space') return;
+  if (!started || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' && e.code === 'Space') return;
   if (e.code === 'Space') { e.preventDefault(); setSpeed(speed ? 0 : lastSpeed); }
   else if (['1', '2', '3'].includes(e.key)) setSpeed(+e.key);
   else if (G.sel && (e.key === '+' || e.key === '=')) addShip(G.sel);
@@ -860,6 +881,26 @@ function frame(now) {
 function begin() { audioStart(); newGame(); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; setSpeed(1); aimCamera(true); }
 $('start').addEventListener('click', begin); $('again').addEventListener('click', begin);
 try { const b = +localStorage.getItem('ol-best'); if (b) $('best').textContent = `Best run: ${b} delivered.`; } catch (e) {}
+
+/* ---------- leaderboard: only where the page is hosted with its scores API (api/scores); anywhere else it stays hidden ---------- */
+const LB = { on: false, top: [], posted: false };
+function lbRender(rank) {
+  for (const [id, n] of [['lb-intro', 5], ['lb-over', 10]]) { const box = $(id), ol = box.querySelector('ol'); box.hidden = !LB.on || (id === 'lb-intro' && !LB.top.length); ol.textContent = '';
+    LB.top.slice(0, n).forEach((e, i) => { const li = document.createElement('li'); if (rank === i + 1) li.className = 'me';
+      for (const [cls, txt] of [['n', (i + 1) + '. ' + e.name], ['v', e.delivered + ' delivered · ' + fmtT(e.seconds)]]) { const sp = document.createElement('span'); sp.className = cls; sp.textContent = txt; li.appendChild(sp); }
+      ol.appendChild(li); }); }
+}
+function lbLoad() { fetch('api/scores').then(r => r.ok ? r.json() : Promise.reject()).then(d => { if (!Array.isArray(d.top)) throw 0; LB.on = true; LB.top = d.top; lbRender(); }).catch(() => { LB.on = false; lbRender(); }); }
+function lbReset() { LB.posted = false; $('lb-post').disabled = false; $('lb-msg').textContent = ''; try { $('lb-name').value = localStorage.getItem('ol-name') || ''; } catch (e) {} lbRender(); }
+$('lb-form').addEventListener('submit', e => {
+  e.preventDefault(); const name = $('lb-name').value.trim(), msg = $('lb-msg'); if (LB.posted || !G.over) return; if (!name) { msg.textContent = 'Enter a name first.'; return; }
+  LB.posted = true; $('lb-post').disabled = true; msg.textContent = 'Posting…'; try { localStorage.setItem('ol-name', name); } catch (err) {}
+  fetch('api/scores', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, delivered: G.delivered, seconds: Math.round(G.t) }) })
+    .then(r => r.json().then(d => r.ok ? d : Promise.reject(d)))
+    .then(d => { LB.top = d.top || LB.top; lbRender(d.rank); msg.textContent = d.rank ? (d.rank <= 10 ? `Posted. You are number ${d.rank}.` : `Posted. You are number ${d.rank}; the board shows the top ten.`) : 'Posted.'; })
+    .catch(d => { LB.posted = false; $('lb-post').disabled = false; msg.textContent = (d && d.error) || 'The score could not be posted. Try again.'; });
+});
+lbLoad();
 readColors();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
 new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

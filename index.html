@@ -1123,10 +1123,10 @@ $('lb-form').addEventListener('submit', e => {
       msg.textContent = d.rank ? (d.rank <= 10 ? `Posted. You are number ${d.rank}${where}.` : `Posted. You are number ${d.rank}${where}; the board shows the top ten.`) : 'Posted.'; })
     .catch(d => { LB.posted = false; $('lb-post').disabled = false; msg.textContent = (d && d.error) || 'The score could not be posted. Try again.'; });
 });
-lbLoad();
 readColors();
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 newGame(today()); resize(); aimCamera(true); requestAnimationFrame(frame); // today's galaxy turns behind the title card
+lbLoad(); // after the first galaxy is dealt: the boards are drawn against it
 window.__ol = { get G() { return G; }, faced, reach, routeLive, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
 })();
 </script>

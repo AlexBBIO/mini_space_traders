@@ -7,7 +7,7 @@ const { chromium } = require('playwright'); const path = require('path');
   await pg.goto('file://' + path.join(__dirname, '..', 'index.html')); await pg.click('#start');
   const rows = [];
   for (let run = 0; run < 12; run++) rows.push(await pg.evaluate(() => {
-    document.getElementById(document.getElementById('over').hidden ? 'start' : 'again').click();
+    __ol.begin('random'); // a different galaxy each run
     const o = __ol, G = o.G; o.manual = true; G.nextRushT = 1e9; const bad = [], seen = new Map(), prev = new Map(); let shortSecs = 0, shortSpells = 0, wasShort = false, lastJoin = 0;
     const units = (p, g) => Math.round(p.rate[g] / .46);
     const check = when => { const sup = [0, 0, 0, 0, 0], dem = [0, 0, 0, 0, 0]; for (const p of G.planets) { sup[p.good] += p.level; for (const g of p.wants) dem[g] += units(p, g); }

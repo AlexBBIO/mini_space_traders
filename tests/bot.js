@@ -5,14 +5,14 @@ const path = require('path');
   const pg = await b.newPage({ viewport: { width: 1200, height: 800 } });
   const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => m.type() === 'error' && errs.push(m.text()));
   const html = require('fs').readFileSync(path.join(__dirname, '..', 'game.html'), 'utf8');
-  await pg.setContent('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><style>[hidden]{display:none!important}html{color-scheme:light}</style><body style="margin:0">' + html + '</body></html>');
+  await pg.setContent('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><style>[hidden]{display:none!important}</style><body style="margin:0">' + html + '</body></html>');
   await pg.click('#start');
   // real drag between two planets
   const pts = await pg.evaluate(() => { const G = __ol.G, c = document.getElementById('c').getBoundingClientRect(); return { n: G.planets.length }; });
   // bot runs
   for (let run = 0; run < 6; run++) {
     const res = await pg.evaluate(() => {
-      document.getElementById(document.getElementById('over').hidden ? 'start' : 'again').click();
+      __ol.begin('random'); // a different galaxy each run
       __ol.manual = true; const o = __ol; let log = [];
       const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
       for (let sec = 0; sec < 3600 && !o.G.over; sec++) {
@@ -42,7 +42,7 @@ const path = require('path');
     });
     console.log(JSON.stringify(res));
   }
-  await pg.waitForTimeout(1200);
+  await pg.waitForTimeout(2300); // the collapse plays out before the summary appears
   await pg.evaluate(() => { document.getElementById('over').hidden = true; __ol.G.sel = __ol.G.routes[1]; });
   await pg.waitForTimeout(700);
   await pg.screenshot({ path: path.join(__dirname, 'over.png') });

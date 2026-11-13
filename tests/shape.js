@@ -8,7 +8,7 @@ const fs = require('fs'), path = require('path');
   await pg.click('#start');
   const rows = [];
   for (let run = 0; run < 24; run++) rows.push(await pg.evaluate(() => {
-    document.getElementById(document.getElementById('over').hidden ? 'start' : 'again').click();
+    __ol.begin('random'); // a different galaxy each run
     const o = __ol; o.manual = true; const out = {};
     const shape = ps => { const n = ps.length, mx = ps.reduce((s, p) => s + p.x, 0) / n, my = ps.reduce((s, p) => s + p.y, 0) / n;
       let a = 0, c = 0, d = 0; for (const p of ps) { const x = p.x - mx, y = p.y - my; a += x * x; c += x * y; d += y * y; }

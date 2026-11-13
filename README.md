@@ -52,7 +52,6 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 - **The galaxy** exists in full from the start. Most worlds are dormant; the one nearest your network wakes next. It rotates very slowly, the inner parts a little faster.
 - **You lose** when six or more open orders sit at one world for a minute. The map dims, shock rings roll out from that world and the view closes in on it before the summary appears.
 - **The day's galaxy is dealt from the date.** The map, what every world sells and buys, the order worlds join and grow in, and the events all come from a seed, and the timetable is worked through on whole seconds, so it unfolds the same on any browser at any frame rate, whatever the player does. Only the split-second jitter in when individual orders appear differs between players.
-- **The music follows the run.** While a world is in the red it quickens, brightens and picks up a pulse, the more so the nearer that world is to collapse. When trade collapses it sinks away.
 
 ## Files
 

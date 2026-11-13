@@ -932,7 +932,7 @@ $('z-fit').addEventListener('click', () => { if (cam.manual) { cam.manual = fals
 
 /* ---------- loop ---------- */
 /* ---------- sound: everything is synthesised in the browser, so there are no audio files ---------- */
-const A = { ctx: null, music: true, sfx: true, last: {}, step: 0, nextT: 0, mel: 3, tension: 0 }, BPM = 72, mtof = m => 440 * 2 ** ((m - 69) / 12);
+const A = { ctx: null, music: true, sfx: true, last: {}, step: 0, nextT: 0, mel: 3 }, BPM = 72, mtof = m => 440 * 2 ** ((m - 69) / 12);
 try { A.music = localStorage.getItem('ol-music') !== '0'; A.sfx = localStorage.getItem('ol-sfx') !== '0'; } catch (e) {}
 const CHORDS = [[41, 57, 60, 64, 67], [40, 55, 59, 62, 66], [38, 53, 57, 60, 64], [36, 52, 55, 59, 62]], SCALE_M = [67, 69, 72, 74, 76, 79, 81, 84]; // Fmaj9, Em9, Dm9, Cmaj9 (bass note first); C pentatonic for the melody
 function audioStart() {
@@ -971,20 +971,13 @@ function kick(t, g) { const c = A.ctx, k = c.createOscillator(), v = c.createGai
 function schedule() { // lofi loop at 72 bpm: a chord every two bars, soft kick and rim, brushed hats, and a sparse wandering melody
   const c = A.ctx; if (!c) return;
   if (c.state !== 'running') { if (!document.hidden) { if (LOG.run && !A.wasDown) LOG.run.audioDrops++; A.wasDown = true; c.resume().catch(() => {}); } return; } A.wasDown = false; // the browser can pause audio on its own; ask for it back
-  // The music follows the run. While a world is in the red it quickens, brightens and picks up a pulse, the more so the nearer that world is to collapse;
-  // when trade collapses it sinks away under the summary.
-  const dead = started && !!G.over, hot = started && !dead ? G.planets.reduce((m, p) => Math.max(m, p.over > 0 ? .35 + .65 * Math.min(1, p.over) : 0), 0) : 0;
-  A.tension += (hot - A.tension) * .12; const ten = A.tension < .03 ? 0 : A.tension;
-  A.pad.frequency.setTargetAtTime(dead ? 240 : 780 + 900 * ten, c.currentTime, .5); A.musicBus.gain.setTargetAtTime(!A.music ? 0 : dead ? .2 : .6, c.currentTime, .5);
   if (!A.music) { A.nextT = c.currentTime + .2; return; }
-  const e8 = 60 / (BPM + 16 * ten) / 2; if (A.nextT < c.currentTime) A.nextT = c.currentTime + .05;
+  const e8 = 60 / BPM / 2; if (A.nextT < c.currentTime) A.nextT = c.currentTime + .05;
   while (A.nextT < c.currentTime + 1.5) { /* scheduled well ahead, so a busy or throttled page never leaves a gap */ const i = A.step % 16, bar = Math.floor(A.step / 16), ch = CHORDS[bar % 4], t = A.nextT + (i % 2 ? .035 : 0); // a little swing on the off-beats
     if (i === 0) { for (const m of ch.slice(1)) for (const det of [-7, 7]) note(m, t, { type: 'triangle', det, wob: true, a: 1.3, hold: e8 * 16 - 1.6, d: 2.4, g: .05, to: A.pad });
       A.phrase = Math.random() < .7; }
     if (i === 0 || i === 8) note(ch[0], t, { type: 'sine', a: .02, d: 1.5, g: .2, to: A.pad });
     if (i === 0 || i === 8 || (i === 11 && bar % 2)) kick(t, .34);
-    if (ten) { note(ch[0] + 24, t, { type: 'triangle', a: .004, d: .15, g: .06 * ten * (i % 2 ? .6 : 1), to: A.pad }); // under pressure: the bass note pulses on every eighth,
-      if ((i === 4 || i === 12) && ten > .5) kick(t, .3 * ten); } // and the kick fills in the other beats once it is serious
     if (i === 4 || i === 12) hit(t, 1500, 1.2, .1, .11, 'bandpass');
     hit(t, 7000, .7, i % 2 ? .016 : .03, .045, 'highpass');
     if (A.phrase && Math.random() < (i % 2 ? .16 : .3)) { A.mel = Math.max(0, Math.min(SCALE_M.length - 1, A.mel + pick([-2, -1, -1, 1, 1, 2])));

@@ -94,7 +94,7 @@ button.toast:hover { border-color: var(--ink); }
 .route-rates th { font-weight: 600; }
 .route-rates svg { width: 10px; height: 10px; margin-right: 5px; }
 .live .short { color: var(--danger); }
-.overlay { position: absolute; inset: 0; display: flex; padding: 16px; overflow-y: auto; background: color-mix(in srgb, var(--bg) 78%, transparent); }
+.overlay { position: absolute; inset: 0; z-index: 5; display: flex; padding: 16px; overflow-y: auto; background: color-mix(in srgb, var(--bg) 78%, transparent); }
 .card { box-sizing: border-box; margin: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: clamp(16px, 3vw, 26px); max-width: 490px; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .card h1 { font-family: var(--display); font-size: 28px; line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
 .card p { margin: 0; line-height: 1.5; }
@@ -122,6 +122,13 @@ button.toast:hover { border-color: var(--ink); }
 .lb form button:disabled { opacity: .45; cursor: default; }
 #lb-msg { font-size: 13px; color: var(--muted); min-height: 1.2em; }
 .result { display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
+.perks { display: flex; flex-direction: column; gap: 8px; }
+.perk { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 12px; align-items: center; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; line-height: 1.4; }
+.perk svg { grid-row: 1 / 3; }
+.perk b { font-size: 15px; }
+.perk span { grid-column: 2; color: var(--muted); }
+.perk:hover { border-color: var(--ink); }
+.shop .buy.equip { grid-column: 1 / -1; display: flex; justify-content: center; align-items: baseline; gap: 8px; padding: 5px 8px; border-color: var(--star); }
 /* Both route-panel states use the same map bounds. Empty space above the controls still passes touches to the chart. */
 .dock-area { position: absolute; inset: auto 0 0; height: min(42%, 254px); pointer-events: none; }
 .dock { box-sizing: border-box; pointer-events: auto; max-height: 100%; padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right)); }
@@ -150,6 +157,7 @@ button.toast:hover { border-color: var(--ink); }
   .dock .row { justify-content: flex-start; }
   .dock .shop { grid-template-columns: 1fr; gap: 6px; position: static; background: none; padding-top: 0; box-shadow: none; }
   .shop .buy { display: flex; justify-content: space-between; padding: 7px 10px; font-size: 14px; }
+  .shop .buy.equip { justify-content: space-between; padding: 7px 10px; }
   .shop .pool, #info { text-align: left; }
   .dock #info { position: static; order: 3; flex: none; width: auto; max-width: none; margin: 0; padding: 0; background: none; font-size: inherit; }
   .route-list { flex-wrap: wrap; }
@@ -225,6 +233,7 @@ button.toast:hover { border-color: var(--ink); }
         <div class="row" id="routes"></div>
         <div class="row shop">
           <span class="pool" id="pool"></span>
+          <button class="buy equip" id="perk" aria-pressed="false" hidden></button>
           <button class="buy" id="buy-ship" title="Adds a freighter to your reserve">Freighter <b></b></button>
           <button class="buy" id="buy-lic" title="Lets you open one more route">Route licence <b></b></button>
           <button class="buy" id="buy-depot" aria-pressed="false" title="Build a depot at a world. A route can leave goods there for another route to carry on. Depots can chain">Depot <b></b></button>
@@ -249,6 +258,19 @@ button.toast:hover { border-color: var(--ink); }
       <span class="best" id="day-note"></span>
       <span class="best" id="best"></span>
       <div class="lb" id="lb-intro" hidden><small id="lb-intro-h">Top runs</small><ol></ol></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="offer" hidden>
+    <div class="card">
+      <h1>Eight worlds</h1>
+      <p>Your network is big enough for advanced equipment. Choose one.</p>
+      <div class="perks">
+        <button class="perk" data-perk="gate"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="var(--star)" stroke-width="2" aria-hidden="true"><circle cx="11" cy="5" r="3.5"/><circle cx="4.5" cy="16.5" r="3.5"/><circle cx="17.5" cy="16.5" r="3.5"/></svg><b>Warp gates</b><span>Three gates, each built at a world. A freighter flying straight from one gated world to another crosses in a second, however far apart they are.</span></button>
+        <button class="perk" data-perk="super"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="var(--star)" stroke-width="2" aria-hidden="true"><rect x="1.5" y="5.5" width="14" height="11" rx="2"/><path d="M16.5 7 L21 11 L16.5 15 Z" fill="var(--star)" stroke="none"/></svg><b>Super freighter</b><span>One freighter that carries three times as much and makes every trip in a third of the time. Send it to any route.</span></button>
+        <button class="perk" data-perk="tele"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="var(--ink)" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="3.5" fill="var(--ink)" stroke="none"/><circle cx="11" cy="11" r="6.5"/><circle cx="11" cy="11" r="9.6" opacity=".5"/></svg><b>Teleporter</b><span>Build it at one world. Each unit that world makes goes straight to a waiting order anywhere in the network, with no freighter.</span></button>
+      </div>
+      <span class="best">The game is paused while you choose.</span>
     </div>
   </div>
 
@@ -283,6 +305,7 @@ const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
 const READY = 3, SETTLE = 12, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 2.7, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
+const OFFER_AT = 8, GATES = 3, WARP_T = 1, SUPER_HOLD = 3, SUPER_ACCEL = 9, TELE_T = .6; // advanced equipment: when it is offered, how many warp gates, a warp crossing in seconds, the super freighter's hold and thrust as multiples, seconds between teleports
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
@@ -304,7 +327,7 @@ const dayName = d => new Date(d + 'T00:00:00Z').toLocaleDateString(undefined, { 
 const r5 = v => Math.round(v / 5) * 5;
 const COST = { ship: n => r5(60 * 1.22 ** n), lic: n => r5(70 * 1.33 ** n), hold: n => [150, 300, 600][n], eng: n => [120, 240, 480][n], depot: n => r5(120 * 1.5 ** n) };
 
-let G, started = false, speed = 1, lastSpeed = 1, drag = null, placing = false, hover = null, hoverD = null, mouse = { x: -99, y: -99 };
+let G, started = false, speed = 1, lastSpeed = 1, drag = null, placing = false, offerAt = 0, hover = null, hoverD = null, mouse = { x: -99, y: -99 };
 const CALM = matchMedia('(prefers-reduced-motion: reduce)'); let DPR = 1;
 let W = 0, H = 0, cam = { s: 1, cx: 0, cy: 0, ax: 1, ay: 1, manual: false, fast: 0 }, viewTop = 62, viewBot = 0, viewRight = 0, pr = 14, U = 1, nameFont = 12, C = {};
 
@@ -319,7 +342,8 @@ function newGame(day) { // day: 'YYYY-MM-DD' deals that day's galaxy; nothing de
   [RM, RP, RE, RS] = ['map', 'plan', 'event', 'noise'].map(k => stream(hash(seed + '/' + k)));
   G = { seed, day: day || null, sec: 0, overAt: 0, t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, routes: [], ships: [], reserve: 4, cooling: [], licences: 3,
     bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
-    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pool: [0, 0, 0, 0, 0], nextGood: null, nextGrowT: Infinity, diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
+    over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pool: [0, 0, 0, 0, 0], nextGood: null, nextGrowT: Infinity,
+    offer: false, offered: false, perk: null, gates: [], tele: null, teleT: 0, teleSent: 0, beams: [], sup: null, diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
   makeGalaxy();
   for (const p of G.planets) { p.accS = 1; p.wants.forEach((g, i) => p.accD[g] = i ? rnd(.4, .9, RP) : rnd(.9, .99, RP)); } // no slow start: every world has a unit ready and places its first order within a few seconds
 }
@@ -424,13 +448,16 @@ function onwardOpen(d, g, from, seen) { // open orders for g that goods left at 
 }
 function reach(s) { // open orders for this world's good that its routes can serve: at stops it shares a route with, plus those a depot on its routes can pass goods on to
   const g = s.good, seen = new Set([s]), mine = G.routes.filter(r => r.stops.includes(s)); let n = 0;
+  if (s === G.tele) { for (const b of G.planets) if (b !== s) n += Math.max(0, open(b, g)); return n; } // the teleporter reaches every world
   for (const r of mine) for (const b of r.stops) if (!seen.has(b)) { seen.add(b); n += Math.max(0, open(b, g)); }
   for (const r of mine) for (const d of r.stops) if (d.depot && d !== s && onward(d, g, r)) n += Math.max(0, onwardOpen(d, g, r, seen) + AHEAD - buffered(d, g));
   return n;
 }
-const reachers = (b, g) => G.planets.filter(s => s.good === g && G.routes.some(r => r.stops.includes(s) && r.stops.includes(b))); // sellers of g that share a route with buyer b
+const reachers = (b, g) => G.planets.filter(s => s.good === g && s !== b && (s === G.tele || G.routes.some(r => r.stops.includes(s) && r.stops.includes(b)))); // sellers of g that share a route with buyer b, or teleport
 function faced(s) { // the demand a seller is asked to cover: each buyer it shares a route with, split between the sellers that buyer can draw on
-  let n = 0; const seen = new Set(); for (const r of G.routes) if (r.stops.includes(s)) for (const b of r.stops) if (b !== s && !seen.has(b) && b.wants.includes(s.good)) { seen.add(b); n += b.rate[s.good] / reachers(b, s.good).length; } return n;
+  let n = 0; const seen = new Set(), ask = b => { if (b !== s && !seen.has(b) && b.wants.includes(s.good)) { seen.add(b); n += b.rate[s.good] / reachers(b, s.good).length; } };
+  if (s === G.tele) G.planets.forEach(ask); else for (const r of G.routes) if (r.stops.includes(s)) r.stops.forEach(ask);
+  return n;
 }
 /* Diagnostics, kept per good in seconds of game time. "dry" is the moment a player notices: three or more orders are waiting at buyers that are linked
    to a seller, yet no linked seller has stock and nothing is on its way. The other counters say why: the linked sellers are flat out (flatOut), and
@@ -447,7 +474,9 @@ function diagTick(gap, dt) {
     if (G.planets.some(s => s.good === g && !sellers.includes(s) && !G.routes.some(r => r.stops.includes(s)))) d.sellerElsewhere += dt; }
 }
 function plan(s) { // the run's timetable: worlds joining and growing, and events. It is worked through once a second, on whole seconds only, so a day's galaxy unfolds the same at any frame rate
-  if (s >= G.nextPlanetT && G.dormant.length) { awaken(); G.nextPlanetT = s + 70 + G.planets.length * 2; // worlds keep joining for as long as the galaxy has any left, a little further apart each time
+  if (s >= G.nextPlanetT && G.dormant.length) { awaken();
+    if (G.planets.length >= OFFER_AT && !G.offered) { G.offered = G.offer = true; offerAt = performance.now(); logEvent('offered advanced equipment'); } // the game waits for the choice (see frame)
+    G.nextPlanetT = s + 70 + G.planets.length * 2; // worlds keep joining for as long as the galaxy has any left, a little further apart each time
     G.nextGrowT = GOODS.some((_, g) => unbought(g)) ? s + SETTLE : G.dormant.length ? G.nextPlanetT - 35 : s + 75; } // a world grows midway between arrivals, or soon after one whose good has no buyer yet
   if (s >= G.nextGrowT) { grow(); G.nextGrowT = G.dormant.length ? Infinity : s + 75; }
   if (G.rush && s >= G.rush.until) G.rush = null;
@@ -492,9 +521,17 @@ function step(dt) {
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
+  if (G.tele) teleport(dt);
+  for (const b of G.beams) b.t += dt; G.beams = G.beams.filter(b => b.t < .5);
   for (const s of G.ships) stepShip(s, dt);
   if (G.sec !== previousSecond) for (const r of G.routes) sampleFleet(r);
   for (const f of G.floats) f.t += dt; G.floats = G.floats.filter(f => f.t < 1);
+}
+function teleport(dt) { // the teleporter world sends a unit straight to an open order: the world nearest its limit first. It never takes an order a freighter has loaded for
+  const p = G.tele, g = p.good; G.teleT -= dt; if (G.teleT > 0 || !p.stock) return;
+  let to = null, top = -1; for (const b of G.planets) if (b !== p && open(b, g) > 0) { const v = totalOrders(b) / crit(b) + ordersOf(b, g) / 100; if (v > top) { top = v; to = b; } }
+  if (!to) return;
+  p.stock--; settleOrder(to, g); G.teleT = TELE_T; G.teleSent++; G.beams.push({ a: p, b: to, g, t: 0 });
 }
 function bend(a, b, side) { // control point of the lane between two worlds, bowed out just enough to clear the star
   const lo = a.id < b.id ? a : b, hi = lo === a ? b : a, ux = hi.x - lo.x, uy = hi.y - lo.y, L = Math.hypot(ux, uy) || 1, nx = -uy / L, ny = ux / L;
@@ -504,12 +541,15 @@ function bend(a, b, side) { // control point of the lane between two worlds, bow
 }
 const laneLen = (a, b, c) => (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.cx - a.x, c.cy - a.y) + Math.hypot(b.x - c.cx, b.y - c.cy)) / 2;
 const HANDLING_TIME = .13, ARRIVAL_DELAY = .25;
-function flightSeconds(len) { return 2 * Math.sqrt((len - 2 * Math.min(.45 * len, DOCK_R)) / G.accel); }
+const capOf = s => s.sup ? G.cap * SUPER_HOLD : G.cap; // the super freighter carries three times the ordinary hold
+function flightSeconds(len, s) { return 2 * Math.sqrt((len - 2 * Math.min(.45 * len, DOCK_R)) / (G.accel * (s && s.sup ? SUPER_ACCEL : 1))); } // nine times the thrust cuts every trip to a third
+const warped = (a, b) => a !== b && G.gates.includes(a) && G.gates.includes(b); // a leg that runs straight from one warp gate to another
+const legSeconds = (a, b, len, s) => warped(a, b) ? WARP_T : flightSeconds(len, s);
 function stepShip(s, dt) {
   if (s.state === 'dock') { if (s.trail.length) s.trail.shift(); s.x = s.at.x + s.ox; s.y = s.at.y + s.oy; s.dockT -= dt; if (s.dockT <= 0) dockAction(s); return; }
   const a = s.from || s.route.stops[s.prev], b = s.route.stops[s.idx], c = bend(a, b, s.side), len = laneLen(a, b, c) || 1;
   const e = Math.min(.45, DOCK_R / len); // it flies from just off one world to just off the next
-  s.tau = Math.min(1, s.tau + dt / flightSeconds(len)); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
+  s.tau = Math.min(1, s.tau + dt / (s.from ? flightSeconds(len, s) : legSeconds(a, b, len, s))); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
   const kk = s.tau < .5 ? 2 * s.tau * s.tau : 1 - 2 * (1 - s.tau) ** 2, t = e + (1 - 2 * e) * kk, u = 1 - t;
   s.x = u * u * a.x + 2 * u * t * c.cx + t * t * b.x; s.y = u * u * a.y + 2 * u * t * c.cy + t * t * b.y;
   s.trT += dt; if (s.trT >= .09) { s.trT = 0; s.trail.push([s.x, s.y]); if (s.trail.length > 16) s.trail.shift(); } // where it has just been, for the wake drawn behind it
@@ -604,7 +644,7 @@ function freightSnapshot(ship) {
     const dir = committed && Math.sign(stops.indexOf(committed.to) - peer.idx);
     const pickups = offers.filter(o => o.from === peer.idx && (!dir || Math.sign(o.to - o.from) === dir));
     pickups.sort((a, b) => a.relay - b.relay || Math.abs(a.to - a.from) - Math.abs(b.to - b.from));
-    let room = G.cap - aboard.length;
+    let room = capOf(peer) - aboard.length;
     for (const o of pickups) {
       const n = Math.min(room, stock[o.source], peerDemand[o.order], o.relay ? Math.max(0, peerDepotRoom[o.to]) : Infinity);
       room -= n; stock[o.source] -= n; peerDemand[o.order] -= n;
@@ -613,7 +653,7 @@ function freightSnapshot(ship) {
   }
   const travel = stops.slice(1).map((p, i) => {
     const len = laneLen(stops[i], p, bend(stops[i], p));
-    return flightSeconds(len) + ARRIVAL_DELAY; // first dock action after arrival
+    return legSeconds(stops[i], p, len, ship) + ARRIVAL_DELAY; // first dock action after arrival
   });
   return { stock, demand, depotRoom, offers, travel };
 }
@@ -622,7 +662,7 @@ function freightSnapshot(ship) {
 // between its pickup and its delivery, freeing that slot at the buyer.
 function scoreTrip(ship, market, path, turn) {
   const stops = ship.route.stops, stock = market.stock.slice(), demand = market.demand.slice();
-  const depotRoom = market.depotRoom.slice(), room = Array(path.length - 1).fill(G.cap);
+  const depotRoom = market.depotRoom.slice(), room = Array(path.length - 1).fill(capOf(ship));
   const value = Array(path.length).fill(0), handling = Array(path.length).fill(0);
   const queue = stops.map(totalOrders), booked = new Map();
   let firstLoad = null;
@@ -690,7 +730,7 @@ function freightPlan(ship) {
   const stops = ship.route.stops, i = ship.idx;
   const committed = ship.cargo.map(c => stops.indexOf(c.to)).filter(idx => idx >= 0 && idx !== i);
   const heading = committed.some(idx => Math.sign(idx - i) === ship.dir) ? ship.dir : committed.length ? -ship.dir : 0;
-  if (heading && ship.cargo.length >= G.cap) return { dir: heading, load: null };
+  if (heading && ship.cargo.length >= capOf(ship)) return { dir: heading, load: null };
   const market = freightSnapshot(ship);
   if (heading && !market.offers.some(o => o.from === i && Math.sign(o.to - i) === heading)) return { dir: heading, load: null };
   if (!committed.length && !market.offers.some(o => market.stock[o.source] > 0 && market.demand[o.order] > 0)) return null;
@@ -780,21 +820,55 @@ function buildDepot(p) {
   return true;
 }
 const shipsOn = r => G.ships.filter(s => s.route === r);
-function addShip(r) {
+function addShip(r, sup) { // sup: send the super freighter and not one from the reserve
+  if (sup) return !!G.sup && !G.sup.ship && launch(r, Math.max(0, G.sup.readyAt - G.t), true);
   if (G.reserve <= 0) return false;
   // A freighter recalled to the reserve needs REDEPLOY seconds before it can work again, so recalling and reassigning one is no shortcut across a route.
   // Fresh freighters go out first; if only recalled ones are left, the one that has waited longest goes and sits out the rest of its wait at the dock.
   G.cooling = G.cooling.filter(t => t > G.t).sort((a, b) => a - b);
   const wait = G.cooling.length >= G.reserve ? G.cooling.shift() - G.t : 0;
-  G.reserve--; r.fleetSamples.length = 0;
+  G.reserve--; return launch(r, wait, false);
+}
+function launch(r, wait, sup) { // a freighter appears at one end of the route, and waits out any redeployment time there
+  r.fleetSamples.length = 0;
   const idx = shipsOn(r).length % 2 ? r.stops.length - 1 : 0, p = r.stops[idx];
-  G.ships.push({ route: r, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3 + wait, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0, trail: [], trT: 0 });
+  const ship = { route: r, sup, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3 + wait, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0, trail: [], trT: 0 };
+  G.ships.push(ship); if (sup) G.sup.ship = ship;
   return true;
 }
-function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; G.cooling.push(G.t + REDEPLOY); r.fleetSamples.length = 0; }
+function recallSuper() { const s = G.sup && G.sup.ship; if (!s) return false; s.cargo.forEach(release); G.ships.splice(G.ships.indexOf(s), 1); s.route.fleetSamples.length = 0; G.sup.ship = null; G.sup.readyAt = G.t + REDEPLOY; return true; }
+function sendSuper(r) { if (!G.sup || (G.sup.ship && G.sup.ship.route === r)) return false; recallSuper(); return addShip(r, true); } // from the reserve, or from the route it is on
+/* Advanced equipment. When the network reaches OFFER_AT worlds the game pauses and offers three pieces; the player takes one.
+   - Warp gates: GATES of them, each built at a world. A route leg that runs straight from one gated world to another takes WARP_T seconds.
+   - Super freighter: one freighter with SUPER_HOLD times the hold and SUPER_ACCEL times the thrust, sent to whichever route the player chooses.
+   - Teleporter: built at one world. That world's units go straight to open orders anywhere, one every TELE_T seconds (see teleport). */
+function choosePerk(k) {
+  if (!G.offer || !['gate', 'super', 'tele'].includes(k)) return false;
+  G.offer = false; G.perk = k; sfx('buy'); if (LOG.run && !manual) { LOG.run.equipment = k; LOG.run.purchases.push({ t: Math.round(G.t), item: 'equipment: ' + k }); }
+  if (k === 'super') { G.sup = { ship: null, readyAt: 0 }; if (!G.sel || !sendSuper(G.sel)) toast('The super freighter is in reserve. Select a route, then press its button to send it there.'); }
+  else placing = k; // the next clicks on worlds build it
+  return true;
+}
+function placeGate(p) { // one more warp gate, at world p. They work as soon as there are two
+  if (G.perk !== 'gate' || G.gates.length >= GATES || !p || G.gates.includes(p)) return false;
+  G.gates.push(p); const left = GATES - G.gates.length; if (!left) placing = false; sfx('buy'); for (const r of G.routes) r.fleetSamples.length = 0;
+  if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: 'warp gate', world: p.name });
+  if (!left) toast(`Warp gates link ${G.gates.map(q => q.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}. A route leg from one of them straight to another takes a second.`, false, p);
+  return true;
+}
+function placeTele(p) {
+  if (G.perk !== 'tele' || G.tele || !p) return false;
+  G.tele = p; G.teleT = 0; placing = false; sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: 'teleporter', world: p.name });
+  toast(`Teleporter built at ${p.name}. Its ${gn(p.good)} now goes straight to any world that orders it.`, false, p); return true;
+}
+function placeAt(q) { // a click on a world while something is waiting to be built
+  if (placing === 'depot') buildDepot(q); else if (placing === 'tele') placeTele(q);
+  else if (placing === 'gate') placeGate(q);
+}
+function removeShip(r) { const l = shipsOn(r).filter(s => !s.sup); if (!l.length) return; /* the super freighter is recalled with its own button */ l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; G.cooling.push(G.t + REDEPLOY); r.fleetSamples.length = 0; }
 function removeRoute(r) {
-  for (const s of shipsOn(r)) { s.cargo.forEach(release); G.cooling.push(G.t + REDEPLOY); }
-  G.reserve += shipsOn(r).length; G.ships = G.ships.filter(s => s.route !== r);
+  for (const s of shipsOn(r)) { s.cargo.forEach(release); if (s.sup) { G.sup.ship = null; G.sup.readyAt = G.t + REDEPLOY; } else { G.reserve++; G.cooling.push(G.t + REDEPLOY); } }
+  G.ships = G.ships.filter(s => s.route !== r);
   if (LOG.run && !manual) LOG.run.routesRemoved++;
   G.routes.splice(G.routes.indexOf(r), 1); G.licences++; if (G.sel === r) G.sel = null;
 }
@@ -968,6 +1042,9 @@ function render() {
     if (nx || d === hoverD) { ctx.font = '600 10px Figtree, system-ui, sans-serif'; ctx.fillStyle = C.muted; ctx.fillText(nx ? d.name + ' · next to join' : d.name, x, y + 20 * k + 4); } }
   // lanes
   laneOffsets(); ctx.lineCap = 'round';
+  if (G.gates.length > 1) { ctx.strokeStyle = C.star; ctx.globalAlpha = .45; ctx.lineWidth = 6 * Math.max(.7, U); ctx.setLineDash([1, 11]); ctx.lineDashOffset = CALM.matches ? 0 : -now / 35; ctx.beginPath(); // the warp links: moving lines of dots, under any lane that uses one
+    G.gates.forEach((a, i) => G.gates.slice(i + 1).forEach(b => { const c = bend(a, b); ctx.moveTo(sx(a.x), sy(a.y)); ctx.quadraticCurveTo(sx(c.cx), sy(c.cy), sx(b.x), sy(b.y)); }));
+    ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0; ctx.globalAlpha = 1; }
   const selectedRoute = pull2 ? pull2.r : G.sel;
   for (const pass of [0, 1]) for (const r of G.routes) { const sel = r === selectedRoute; if (sel !== !!pass) continue;
     ctx.globalAlpha = sel || !selectedRoute ? 1 : .38; ctx.strokeStyle = sel ? C.ink : C.lane; ctx.lineWidth = (sel ? 3.5 : 2) * Math.max(.7, U); ctx.beginPath();
@@ -982,8 +1059,7 @@ function render() {
     ctx.strokeStyle = bad ? C.danger : C.ink; ctx.lineWidth = 2.5; ctx.setLineDash([6, 6]); ctx.beginPath();
     drag.stops.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](sx(p.x), sy(p.y))); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); ctx.setLineDash([]); }
   // freighters (drawn under the worlds, so a docked freighter tucks in behind its world)
-  const rows = G.cap > 8 ? 3 : 2, cols = Math.ceil(G.cap / rows), L = cols * 5.4 + 3, hh = rows * 2.9 + .2;
-  for (const s of G.ships) {
+  for (const s of G.ships) { const cap = capOf(s), rows = cap > 24 ? 4 : cap > 8 ? 3 : 2, cols = Math.ceil(cap / rows), L = cols * 5.4 + 3, hh = rows * 2.9 + .2; // the hull is as long as its hold
     const leg = s.state === 'fly' && s.prev !== s.idx ? segPts(s.route, Math.min(s.prev, s.idx)) : null, a = leg && s.route.stops[s.prev], b = leg && s.route.stops[s.idx];
     const at = (wx, wy) => { let x = sx(wx), y = sy(wy); // a point on its lane, moved aside where routes run side by side
       if (leg) { const f = Math.min(1, Math.min(Math.hypot(wx - a.x, wy - a.y), Math.hypot(wx - b.x, wy - b.y)) * cam.s / 26); x += leg.nx * f; y += leg.ny * f; } return [x, y]; };
@@ -997,12 +1073,15 @@ function render() {
       ctx.fillStyle = C.star; ctx.globalAlpha = .22 * s.glow; ctx.beginPath(); ctx.arc(-L / 2 - 7, 0, 12 * f, 0, 6.2832); ctx.fill();
       ctx.globalAlpha = .95 * s.glow; ctx.beginPath(); ctx.moveTo(-L / 2 - 2, -3); ctx.quadraticCurveTo(-L / 2 - 8 * f, -2.6, -L / 2 - 17 * f, 0); ctx.quadraticCurveTo(-L / 2 - 8 * f, 2.6, -L / 2 - 2, 3); ctx.fill(); ctx.globalAlpha = 1; }
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.moveTo(-L / 2, -2.6); ctx.lineTo(-L / 2 - 3, -3.8); ctx.lineTo(-L / 2 - 3, 3.8); ctx.lineTo(-L / 2, 2.6); ctx.fill(); // engine bell
-    ctx.fillStyle = C.bg; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(-L / 2, -hh, L, hh * 2, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.bg; ctx.strokeStyle = s.sup ? C.star : C.ink; ctx.lineWidth = s.sup ? 2.4 : 1.6; ctx.beginPath(); ctx.roundRect(-L / 2, -hh, L, hh * 2, 3); ctx.fill(); ctx.stroke();
     ctx.fillStyle = C.ink;
     ctx.beginPath(); ctx.moveTo(L / 2 + .5, -4.5); ctx.lineTo(L / 2 + 6, 0); ctx.lineTo(L / 2 + .5, 4.5); ctx.fill();
     s.cargo.forEach((c, i) => { ctx.fillStyle = C.g[c.g]; glyph(c.g, -L / 2 + 4.2 + Math.floor(i / rows) * 5.4, (i % rows - (rows - 1) / 2) * 5.4, 2.05); });
     ctx.restore();
   }
+  for (const bm of G.beams) { const k = bm.t / .5, ax = sx(bm.a.x), ay = sy(bm.a.y), bx = sx(bm.b.x), by = sy(bm.b.y), e = Math.min(1, k * 2.4); // a teleport: a beam that fades, and the unit crossing it
+    ctx.strokeStyle = ctx.fillStyle = C.g[bm.g]; ctx.globalAlpha = .75 * (1 - k); ctx.lineWidth = 2.5 * U; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.globalAlpha = 1 - k * k; glyph(bm.g, ax + (bx - ax) * e, ay + (by - ay) * e, 4.5 * U); ctx.globalAlpha = 1; }
   // planets
   for (const p of G.planets) {
     const P = pr * SCALE[p.level - 1];
@@ -1026,6 +1105,9 @@ function render() {
     else { glyph(p.good, x, y - R * .38, R * .27); glyph(p.good, x - R * .4, y + R * .28, R * .27); glyph(p.good, x + R * .4, y + R * .28, R * .27); }
     if (ping && ping.p === p) { const age = (performance.now() - ping.at) / 1000; if (age > 4) ping = null; else { ctx.strokeStyle = C.ink; // rings spreading out from the world a notification pointed at
       for (let i = 0; i < 2; i++) { const ph = (age * .9 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * Math.min(1, 4 - age); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, R + 6 + ph * 34 * Math.max(.75, U), 0, 6.2832); ctx.stroke(); } ctx.globalAlpha = 1; } }
+    if (G.gates.includes(p)) { ctx.strokeStyle = C.star; ctx.lineWidth = 2.2; ctx.setLineDash([5, 4]); ctx.lineDashOffset = CALM.matches ? 0 : -now / 70; // a warp gate: a turning dashed ring
+      ctx.beginPath(); ctx.arc(x, y, P + 7.5, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
+    if (p === G.tele) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4; for (const [d, al] of [[7, .9], [11, .45]]) { ctx.globalAlpha = al; ctx.beginPath(); ctx.arc(x, y, P + d, 0, 6.2832); ctx.stroke(); } ctx.globalAlpha = 1; } // the teleporter: two thin rings
     if (selectedRoute && selectedRoute.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     if (p === hover || (drag && drag.stops.includes(p))) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     for (const q of drag ? drag.stops : hover ? [hover] : []) if (q !== p && p.wants.includes(q.good)) { ctx.strokeStyle = C.g[q.good]; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, P + 17, 0, 6.2832); ctx.stroke(); }
@@ -1097,7 +1179,7 @@ function render() {
 }
 
 /* ---------- HUD ---------- */
-let sig = '', infoSig = '';
+let sig = '', infoSig = '', perkSig = '';
 const perMin = r => (r * tempoNow() * 60).toFixed(1);
 const GSVG = ['<path d="M6 1 L11 10 H1 Z"/>', '<circle cx="6" cy="6" r="4.6"/>', '<rect x="1.6" y="1.6" width="8.8" height="8.8"/>', '<path d="M6 .5 L11 6 L6 11.5 L1 6 Z"/>', '<path d="M11 6 L8.5 10.3 H3.5 L1 6 L3.5 1.7 H8.5 Z"/>']
   .map((d, g) => `<svg width="12" height="12" viewBox="0 0 12 12" fill="var(--g${g})" aria-hidden="true">${d}</svg>`);
@@ -1107,18 +1189,26 @@ function syncHud() {
   for (const [k, id] of [['ship', 'buy-ship'], ['lic', 'buy-lic'], ['hold', 'buy-hold'], ['eng', 'buy-eng'], ['depot', 'buy-depot']]) {
     const c = cost(k), b = $(id); b.disabled = c == null || G.credits < c; b.lastElementChild.textContent = c == null ? 'max' : '◈' + c; }
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
-  hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
-  $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(supplyRate(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(demandRate(hp, g)) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'} · in trouble at ${crit(hp)} open orders${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
+  hint.textContent = placing === 'depot' ? 'Click or tap a world to build the depot there. Esc cancels.' : placing === 'tele' ? 'Click or tap the world that should teleport its goods. Esc puts it off.'
+    : placing === 'gate' ? `Click or tap a world to build a warp gate there: ${GATES - G.gates.length} to place. Esc puts it off.` : 'Drag from a world to one that buys its goods';
+  $('buy-depot').setAttribute('aria-pressed', placing === 'depot'); $('z-fit').disabled = !cam.manual;
+  $('offer').hidden = !(started && G.offer && !G.over && !manual);
+  const pb = $('perk'), ph = G.perk === 'gate' ? (G.gates.length >= GATES ? `Warp gates <b>${G.gates.map(p => p.name).join(' · ')}</b>` : `Warp gates <b>${placing === 'gate' ? 'pick a world · ' : ''}${GATES - G.gates.length} to place</b>`)
+    : G.perk === 'tele' ? (G.tele ? `Teleporter <b>${G.tele.name} · ${G.teleSent} sent</b>` : `Teleporter <b>${placing === 'tele' ? 'pick a world' : 'place it'}</b>`)
+    : G.perk === 'super' ? `Super freighter <b>${G.sup.ship ? 'on route ' + G.sup.ship.route.n : 'in reserve'}</b>` : '';
+  if (ph !== perkSig) { perkSig = ph; pb.hidden = !ph; pb.innerHTML = ph;
+    pb.title = G.perk === 'super' ? 'Sends the super freighter to the selected route, or recalls it from there' : G.perk === 'gate' ? (G.gates.length >= GATES ? 'Shows the warp gates' : 'Build a warp gate at a world') : G.tele ? 'Shows the teleporter' : 'Build the teleporter at a world'; }
+  pb.setAttribute('aria-pressed', placing === 'gate' || placing === 'tele');
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(supplyRate(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(demandRate(hp, g)) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'} · in trouble at ${crit(hp)} open orders${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${hp === G.tele ? ' · teleports its goods to any world that orders them' : ''}${G.gates.includes(hp) ? ' · warp gate' : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
-  const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
+  const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve + '/' + (G.sup && G.sup.ship ? G.sup.ship.route.id : '');
   if (s === sig) return syncLive(); sig = s;
-  const chips = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
-    return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') : 'no ship'}</button>`; }).join('');
+  const chips = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r), star = shipsOn(r).some(s => s.sup) ? ' ★' : ''; // ★: the super freighter flies this route
+    return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') + star : 'no ship'}</button>`; }).join('');
   let h = chips ? '<div class="route-list">' + chips + '</div>' : '';
-  if (G.sel) { const r = G.sel, n = shipsOn(r).length;
+  if (G.sel) { const r = G.sel, n = shipsOn(r).filter(s => !s.sup).length, star = shipsOn(r).length > n ? '<span title="and the super freighter"> + ★</span>' : '';
     h += `<div class="panel"><b class="route-title">Route ${r.n}</b>
-      <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" title="Recall a freighter to the reserve. It needs ${REDEPLOY} seconds before it can fly again" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
+      <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" title="Recall a freighter to the reserve. It needs ${REDEPLOY} seconds before it can fly again" ${n ? '' : 'disabled'}>−</button><b>${n}${star}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
       <div class="route-path"><span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
         <button class="rm" data-act="remove">Remove route</button></div>
       <div class="live" id="rlive"></div></div>`; }
@@ -1197,7 +1287,7 @@ function routeBalance(r) {
   const other = G.routes.filter(q => q !== r && staffed.has(q));
   const network = other.concat(r);
   const sides = r.stops.map(p => freightReach(p, other, false));
-  const origins = G.planets.map(p => ({ p, reach: freightReach(p, network, true) }));
+  const origins = G.planets.map(p => ({ p, reach: p === G.tele ? new Set(G.planets) : freightReach(p, network, true) })); // the teleporter's supply reaches every buyer
   const rows = [];
   for (let g = 0; g < G.active; g++) {
     const needs = new Map(G.planets.filter(p => p.wants.includes(g)).map(p => [p, demandRate(p, g)]));
@@ -1269,7 +1359,13 @@ $('routes').addEventListener('click', e => {
   else if (G.sel) { const a = b.dataset.act; if (a === 'plus') addShip(G.sel); else if (a === 'minus') removeShip(G.sel); else if (a === 'remove') removeRoute(G.sel); }
 });
 for (const k of ['ship', 'lic', 'hold', 'eng']) $('buy-' + k).addEventListener('click', () => { if (buy(k) && k === 'ship' && G.sel) addShip(G.sel); });
-$('buy-depot').addEventListener('click', () => { placing = !placing && G.credits >= cost('depot'); });
+$('buy-depot').addEventListener('click', () => { placing = placing !== 'depot' && G.credits >= cost('depot') ? 'depot' : false; });
+$('offer').addEventListener('click', e => { const b = e.target.closest('button[data-perk]'); if (b && performance.now() - offerAt > 500) choosePerk(b.dataset.perk); }); // the half second keeps a click meant for the map from choosing
+$('perk').addEventListener('click', () => { // the equipment's own button: place it, show it, or move the super freighter
+  if (G.perk === 'gate') { if (G.gates.length >= GATES) showWorld(G.gates[0]); else placing = placing === 'gate' ? false : 'gate'; }
+  else if (G.perk === 'tele') { if (G.tele) showWorld(G.tele); else placing = placing === 'tele' ? false : 'tele'; }
+  else if (G.perk === 'super') { if (!G.sel) toast('Select a route, then press this to send the super freighter there.'); else if (G.sup.ship && G.sup.ship.route === G.sel) recallSuper(); else sendSuper(G.sel); }
+});
 function setSpeed(v) { if (v) lastSpeed = v; speed = v; for (let i = 0; i < 4; i++) $('sp' + i).setAttribute('aria-pressed', i === v); }
 for (let i = 0; i < 4; i++) $('sp' + i).addEventListener('click', () => setSpeed(i === 0 && speed === 0 ? lastSpeed : i));
 let delArm = null; // the route a first press of Delete has marked for removal
@@ -1309,7 +1405,7 @@ const gap = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.
 cv.addEventListener('pointerdown', e => {
   lastPtr = e.pointerType; if (!started || G.over || e.button === 2) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
   if (ptrs.size === 2) { drag = null; pan = null; pull2 = null; pinch = gap(); return; }
-  if (placing) { const q = planetAt(mouse.x, mouse.y); if (q) buildDepot(q); return; }
+  if (placing) { const q = planetAt(mouse.x, mouse.y); if (q) placeAt(q); return; }
   const p = planetAt(mouse.x, mouse.y);
   if (p) { cv.setPointerCapture(e.pointerId); const r = G.sel; let ext = null, atStart = false;
     if (r && r.stops.length < MAX_STOPS) { if (r.stops[r.stops.length - 1] === p) ext = r; else if (r.stops[0] === p) { ext = r; atStart = true; } }
@@ -1430,15 +1526,15 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 33, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 34, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
-const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
+const fedBy = (p, g) => (!!G.tele && G.tele !== p && G.tele.good === g) || G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
   || r.stops.some(d => d.depot && G.routes.some(r2 => r2 !== r && r2.stops.includes(d) && r2.stops.some(z => z.good === g)))));
 function logSample() {
   const tot = G.planets.map(totalOrders);
   LOG.run.timeline.push({ t: Math.round(G.t), routeDetail: logRoutes(), worlds: G.planets.length, routes: G.routes.length, routesIdle: G.routes.filter(r => !shipsOn(r).length || !trades(r)).length, freighters: G.ships.length, reserve: G.reserve,
-    credits: G.credits, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
+    credits: G.credits, equipment: G.perk, teleported: G.teleSent, hold: G.cap, engineLevel: G.bought.eng, depots: G.planets.filter(p => p.depot).length, openOrders: tot.reduce((a, b) => a + b, 0), worstWorldOrders: Math.max(...tot),
     worldsInTrouble: G.planets.filter(p => p.over > 0).length, stock: G.planets.reduce((n, p) => n + p.stock, 0), delivered: G.delivered, midWorldUnitsPerMin: +(tempoNow() * 60).toFixed(1),
     goods: GOODS.map((name, g) => { const sellers = G.planets.filter(p => p.good === g), buyers = G.planets.filter(p => p.wants.includes(g)); if (!sellers.length && !buyers.length) return null; // per good: is it short because of supply, or because nothing links buyer to seller?
       return { good: name, sellers: sellers.length, buyers: buyers.length, supplyRate: +sellers.reduce((n, p) => n + out(p), 0).toFixed(2), demandRate: +buyers.reduce((n, p) => n + p.rate[g], 0).toFixed(2), stock: sellers.reduce((n, p) => n + p.stock, 0), inDepots: G.planets.reduce((n, z) => n + z.items.filter(v => v === g).length, 0), inTransit: G.ships.reduce((n, o) => n + o.cargo.filter(c => c.g === g).length, 0),
@@ -1484,11 +1580,11 @@ const logEvent = (kind, world) => { if (LOG.run && !manual) LOG.run.events.push(
 let last = performance.now(), manual = false;
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (started && !G.over && !manual) { for (let i = 0; i < speed; i++) step(dt); logTick(dt); }
+  if (started && !G.over && !manual && !G.offer) { for (let i = 0; i < speed; i++) step(dt); logTick(dt); } // paused while the equipment choice is open
   aimCamera(false); render(); syncHud(); requestAnimationFrame(frame);
 }
 let mode = 'daily', overTimer = 0; // daily: today's galaxy, the same for everyone. random: a fresh one each run
-function begin(m) { if (m) mode = m; clearTimeout(overTimer); audioStart(); newGame(mode === 'daily' ? today() : null); logStart(); placing = false; sig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; ping = null;
+function begin(m) { if (m) mode = m; clearTimeout(overTimer); audioStart(); newGame(mode === 'daily' ? today() : null); logStart(); placing = false; sig = ''; perkSig = ''; started = true; $('intro').hidden = true; $('over').hidden = true; $('toasts').innerHTML = ''; ping = null;
   $('s-mode').textContent = G.day ? 'Daily · ' + dayName(G.day) : 'Random'; setSpeed(1); aimCamera(true); }
 $('start').addEventListener('click', () => begin('daily')); $('start-random').addEventListener('click', () => begin('random'));
 $('again').addEventListener('click', () => begin()); $('again-other').addEventListener('click', () => begin(mode === 'daily' ? 'random' : 'daily')); $('copy-log').addEventListener('click', logCopy);
@@ -1546,6 +1642,6 @@ new ResizeObserver(() => { cam.fast = 45; }).observe($('dock-area'));
 newGame(today()); resize(); aimCamera(true); requestAnimationFrame(frame); // today's galaxy turns behind the title card
 lbLoad(); // after the first galaxy is dealt: the boards are drawn against it
 // hooks for the test scripts: on a page opened from disk or served locally, never on the hosted site
-if (location.protocol !== 'https:') window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
+if (location.protocol !== 'https:') window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, choosePerk, placeGate, placeTele, sendSuper, recallSuper, legSeconds, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
 })();
 </script>

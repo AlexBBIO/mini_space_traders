@@ -51,6 +51,12 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 - **Depots** let one route leave goods for another route to carry on. A world also fills its own orders straight from its depot. If a freighter already booked the order, its cargo can replenish the depot. The buyer pays once.
 - **Prices and events.** A unit pays four credits plus the number of outstanding orders for its good. A demand surge doubles that price. A world in trouble (see below) adds two credits per delivery while the backlog lasts. Supply crunches temporarily reduce production.
 - **The galaxy** exists in full from the start, about fifty worlds. Most are dormant; the one nearest your network wakes next, and they keep waking, a little further apart each time, until none are left, which takes over ninety minutes. It rotates very slowly, the inner parts a little faster.
+- **Advanced equipment.** When the eighth world joins, the game pauses and offers three pieces of equipment. You take one, and it is yours for the rest of the run.
+  - **Warp gates.** Three gates, each built at a world of your choice. A route leg that runs straight from one gated world to another takes a second, however long it is. They work as soon as two are built.
+  - **Super freighter.** One freighter with three times the hold that makes every trip in a third of the time. It goes to the selected route, and its button in the shop moves it to another or recalls it. Hold and engine upgrades apply to it too.
+  - **Teleporter.** Built at one world of your choice. Each unit that world makes goes straight to an open order anywhere in the network, with no route or freighter, to the world nearest its limit first. It pays like any delivery, and it never takes an order a freighter has already loaded for.
+
+  Gates and the teleporter stay where they are built. Building can be put off with Esc and picked up again from the equipment's button.
 - **Freighters redeploy slowly.** A freighter recalled to the reserve, or freed by closing its route, needs six seconds before it can fly again, so recalling and reassigning one is no shortcut across a route. Freighters that were never recalled go out first.
 - **Bigger worlds can carry more orders.** A world is in trouble at about 2.7 open orders for each unit it makes, and never fewer than six: six at levels 1 and 2, eight at level 3. A bigger world wants more, so its orders arrive faster, and the limit grows with it. Hovering over a world shows its limit.
 - **You lose** when a world stays in trouble for a minute. A warning says so the moment it reaches its limit. The map dims, shock rings roll out from that world and the view closes in on it before the summary appears.
@@ -88,9 +94,10 @@ npm test
 | Script | What it checks |
 | --- | --- |
 | `tests/bot.js` | A crude bot plays several fast-forwarded runs and reports how long it survives. Also tests a relay through two depots. |
-| `tests/stress.js` | Random routes, removals and depots for 15 minutes, checking the order bookkeeping stays consistent. |
+| `tests/stress.js` | Random routes, removals and depots for 15 minutes, with all three pieces of advanced equipment in play, checking the order bookkeeping stays consistent. |
 | `tests/balance.js` | Runs the unit ledger unplayed over 40 galaxies and checks its rules: two units spare, never more than one short, newcomers arrive buying, a good with no buyer gets one within 15 seconds and no second seller first, worlds keep joining past fourteen, nothing is taken away. |
 | `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. On phone sizes: the map holds still when a route panel opens, and the shop stays in view. Delete closes a route only on a second press. |
+| `tests/perks.js` | Brings the eighth world in, checks the equipment choice appears and pauses the game, then takes each piece with real clicks: builds the three gates, moves the super freighter, and builds a teleporter on a phone and waits for it to send a unit. |
 | `tests/audio.js` | Plays in real time with sound on and checks for errors. |
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |
 | `tests/depot.js` | A depot world as a hub: one route in, another out to a buyer the first route never visits. |

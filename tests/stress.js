@@ -20,7 +20,13 @@ const path = require('path');
         if (Math.random() < .5 && G.routes.length) { const r = rndPick(G.routes); o.insertStop(r, Math.floor(Math.random() * (r.stops.length - 1)), rndPick(G.planets)); }
         if (Math.random() < .2 && G.routes.length) o.removeShip(rndPick(G.routes));
         if (Math.random() < .2) { G.credits += 500; o.buildDepot(rndPick(G.planets)); }
+        if (G.offer) { // the equipment choice: take all three, which the game never allows, so that each is in play while the rest is churned
+          o.choosePerk('tele'); o.placeTele(rndPick(G.planets)); G.offer = true; o.choosePerk('gate'); for (let k = 0; k < 9; k++) o.placeGate(rndPick(G.planets)); G.offer = true; o.choosePerk('super'); }
+        if (G.sup && G.routes.length) { if (Math.random() < .5) o.sendSuper(rndPick(G.routes)); else if (Math.random() < .2) o.recallSuper(); }
       }
+      if (G.sup) { const sups = G.ships.filter(s => s.sup); if (sups.length > 1 || (sups[0] || null) !== G.sup.ship) bad.push(`t${sec} super freighter lost or doubled`); }
+      for (const s of G.ships) if (s.cargo.length > G.cap * (s.sup ? 3 : 1)) bad.push(`t${sec} a freighter carries ${s.cargo.length}`);
+      if (!G.routes.includes(G.sel) && G.sel) bad.push(`t${sec} a removed route is still selected`);
       checks++;
       if (sec % 60 === 59) { const row = []; for (const g of [0, 1, 2, 3, 4]) { const sellers = G.planets.filter(p => p.good === g); if (!sellers.length) continue;
           const stock = sellers.reduce((n, p) => n + p.stock, 0), transit = G.ships.reduce((n, s) => n + s.cargo.filter(c => c.g === g).length, 0) + G.planets.reduce((n, p) => n + p.items.filter(v => v === g).length, 0), ord = G.planets.reduce((n, p) => n + (p.orders[g] || 0), 0);
@@ -30,7 +36,7 @@ const path = require('path');
         if (res !== carried || res > ord || res < 0) bad.push(`t${sec} ${p.name} g${g} res${res} carried${carried} ord${ord}`);
       }
     }
-    return { bal: window.__bal.filter((_, i) => i % 3 === 2), checks, bad: bad.slice(0, 8), badCount: bad.length, delivered: G.delivered, ships: G.ships.length, routes: G.routes.length, depots: G.planets.filter(p => p.depot).length };
+    return { bal: window.__bal.filter((_, i) => i % 3 === 2), checks, bad: bad.slice(0, 8), badCount: bad.length, delivered: G.delivered, ships: G.ships.length, routes: G.routes.length, depots: G.planets.filter(p => p.depot).length, gates: G.gates.length, teleported: G.teleSent, superOn: G.sup && G.sup.ship ? 'route ' + G.sup.ship.route.n : G.sup ? 'reserve' : 'none' };
   });
   console.log(out.bal.join('\n')); delete out.bal; console.log(JSON.stringify(out));
   await b.close();

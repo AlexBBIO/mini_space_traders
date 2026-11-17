@@ -414,3 +414,119 @@ test('orders stop arriving three above a world\'s limit', () => {
   assert.equal(mid.orders[mid.wants[0]], 9);
   assert.equal(big.orders[big.wants[0]], 11);
 });
+
+// ----- advanced equipment -----
+function offered(o, perk) { // put the equipment choice on the table and take one
+  o.G.offer = true;
+  assert.equal(o.choosePerk(perk), true);
+}
+function crossing(o, route, from, to) { // seconds a freighter needs to carry one waiting unit from one world to the other
+  const G = o.G, g = from.good, before = G.delivered, t0 = G.t;
+  from.stock = 1; to.orders[g] = 1;
+  for (let i = 0; i < 4000 && G.delivered === before; i++) o.step(.05);
+  assert.equal(G.delivered, before + 1);
+  return G.t - t0;
+}
+
+test('equipment is offered once, when the eighth world joins, and one piece can be taken', () => {
+  const o = galaxy(), G = o.G;
+  for (let i = 0; i < 60 && G.planets.length < 7; i++) { G.nextPlanetT = 0; run(o, 1); }
+  assert.equal(G.planets.length, 7);
+  assert.equal(G.offer, false);
+  G.nextPlanetT = 0; run(o, 1);
+  assert.equal(G.planets.length, 8);
+  assert.equal(G.offer, true);
+  assert.equal(o.choosePerk('nonsense'), false);
+  assert.equal(o.choosePerk('tele'), true);
+  assert.equal(G.offer, false);
+  assert.equal(o.choosePerk('gate'), false, 'a second piece was handed out');
+  G.nextPlanetT = 0; run(o, 1);
+  assert.equal(G.planets.length, 9);
+  assert.equal(G.offer, false, 'the choice was offered again');
+});
+
+test('a leg between two of the three warp gates takes a second; other legs are unchanged', () => {
+  const o = galaxy(), G = o.G, [a, b, c, d] = fixedStops(o);
+  b.ang = 2.2; // far from a
+  want(b, a.good, 0); want(c, a.good, 0);
+  const far = o.createRoute([a, b]), near = o.createRoute([a, c]);
+  run(o, 1);
+  const slow = crossing(o, far, a, b), other = crossing(o, near, a, c);
+  offered(o, 'gate');
+  assert.equal(o.placeGate(a), true);
+  assert.equal(o.placeGate(a), false, 'two gates at one world');
+  assert.ok(o.legSeconds(a, b, 900) > 10, 'one gate alone did something');
+  assert.equal(o.placeGate(b), true);
+  assert.equal(o.legSeconds(a, b, 900), 1);
+  assert.equal(o.legSeconds(b, a, 900), 1);
+  assert.ok(o.legSeconds(a, c, 900) > 10);
+  assert.equal(o.placeGate(d), true);
+  assert.equal(o.legSeconds(d, a, 900), 1, 'the third gate links to the others');
+  assert.equal(o.placeGate(c), false, 'a fourth gate was built');
+  run(o, 40); // both freighters are home and idle again
+  const fast = crossing(o, far, a, b);
+  assert.ok(slow > 12, `the long leg took ${slow}s before the gates`);
+  assert.ok(fast < 4, `the warp leg took ${fast}s`);
+  near.stops[0].stock = 0;
+  assert.ok(Math.abs(crossing(o, near, a, c) - other) < 3, 'a leg without gates changed');
+});
+
+test('the super freighter carries three holds, flies in a third of the time, and moves between routes on its own button', () => {
+  const o = galaxy(), G = o.G, [a, b, c, d] = fixedStops(o);
+  want(b, a.good, 0);
+  const r = o.createRoute([a, b]), other = o.createRoute([c, d]);
+  o.removeShip(r); // no ordinary freighter on the first route
+  G.sel = r;
+  offered(o, 'super');
+  const s = o.shipsOn(r)[0];
+  assert.ok(s && s.sup, 'the super freighter did not go to the selected route');
+  near(o.legSeconds(a, c, 900, s), o.legSeconds(a, c, 900) / 3);
+  a.stock = 8; b.orders[a.good] = 8;
+  let most = 0; for (let i = 0; i < 400; i++) { o.step(.05); most = Math.max(most, s.cargo.length); }
+  assert.ok(most > G.cap, `it carried ${most}, no more than an ordinary hold`);
+  assert.equal(G.delivered, 8);
+  o.removeShip(r);
+  assert.equal(o.shipsOn(r).length, 1, 'the ordinary recall took the super freighter');
+  assert.equal(o.sendSuper(r), false);
+  assert.equal(o.sendSuper(other), true);
+  assert.equal(o.shipsOn(r).length, 0);
+  const moved = o.shipsOn(other).find(x => x.sup);
+  assert.ok(moved && moved.dockT > 5, 'moving it skipped the redeployment wait');
+  const reserve = G.reserve;
+  o.removeRoute(other);
+  assert.equal(G.reserve, reserve + 1, 'only the ordinary freighter returns to the reserve');
+  assert.equal(G.sup.ship, null);
+  assert.equal(o.sendSuper(r), true);
+});
+
+test('the teleporter sends a world\'s units to open orders with no route, and leaves booked orders alone', () => {
+  const o = galaxy(), G = o.G, [a, b, c] = fixedStops(o);
+  for (const r of G.routes.slice()) o.removeRoute(r);
+  want(b, a.good, 0); want(c, a.good, 0);
+  offered(o, 'tele');
+  assert.equal(o.placeTele(a), true);
+  assert.equal(o.placeTele(b), false, 'the teleporter was built twice');
+  a.stock = 3; b.orders[a.good] = 2; c.orders[a.good] = 1;
+  run(o, 5);
+  assert.equal(G.delivered, 3);
+  assert.equal(a.stock, 0);
+  assert.equal(b.orders[a.good] + c.orders[a.good], 0);
+  assert.ok(G.earned > 0);
+  a.stock = 2; b.orders[a.good] = 1; b.res[a.good] = 1; // a freighter has already loaded for this order
+  run(o, 5);
+  assert.equal(G.delivered, 3);
+  assert.equal(a.stock, 2);
+});
+
+test('the teleporter world makes units for orders anywhere, and helps the world nearest its limit first', () => {
+  const o = galaxy(), G = o.G, [a, b, c] = G.planets;
+  want(b, a.good, 0); want(c, a.good, 0); want(c, (a.good + 1) % 4, 0);
+  offered(o, 'tele'); o.placeTele(a);
+  assert.equal(o.reach(a), 0);
+  b.orders[a.good] = 2; c.orders[a.good] = 1; c.orders[(a.good + 1) % 4] = 4; // c is nearer its limit
+  assert.equal(o.reach(a), 3);
+  a.stock = 1; a.accS = -100;
+  run(o, 1);
+  assert.equal(c.orders[a.good], 0);
+  assert.equal(b.orders[a.good], 2);
+});

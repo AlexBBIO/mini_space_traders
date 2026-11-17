@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process'), fs = require('fs'), path = requi
 const root = path.join(__dirname, '..'), failed = [];
 const built = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), body = fs.readFileSync(path.join(root, 'game.html'), 'utf8');
 if (!built.includes(body)) failed.push('index.html is not built from the current game.html: run node build.js');
-const scripts = ['balance', 'stress', 'depot', 'stops', 'shape', 'daily', 'logging', 'leaderboard', 'runs', 'ui', 'bot', 'audio'].map(n => ['tests/' + n + '.js']);
+const scripts = ['balance', 'stress', 'depot', 'stops', 'shape', 'daily', 'logging', 'leaderboard', 'runs', 'ui', 'perks', 'bot', 'audio'].map(n => ['tests/' + n + '.js']);
 for (const args of [['--test', 'tests/route-analytics.js'], ...scripts]) {
   const name = args[args.length - 1], t = Date.now(), r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8', timeout: 600000, maxBuffer: 64 << 20 });
   const text = (r.stdout || '') + (r.stderr || '');

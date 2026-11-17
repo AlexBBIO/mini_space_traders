@@ -269,6 +269,37 @@ test('a demand surge attracts a ship to the better-paying buyer at equal travel 
   assert.equal(o.G.earned, 10);
 });
 
+test('distress from other goods attracts a pickup when the trips otherwise pay the same', () => {
+  const o = galaxy(), [west, source, east, other] = fixedStops(o);
+  o.G.cap = 1; source.stock = 1;
+  for (const buyer of [west, east]) { want(buyer, source.good, 0); buyer.orders[source.good] = 1; }
+  want(west, other.good, 0); west.orders[other.good] = 5;
+  const route = o.createRoute([source, east]); o.extendRoute(route, [west], true);
+  run(o, 1);
+  assert.equal(o.shipsOn(route)[0].cargo[0].to, west);
+});
+
+for (const [scenario, farBacklog, nearBacklog, deliverFar] of [
+  ['the booked buyer is still in distress', 5, 0, true],
+  ['the booked buyer recovered in flight', 4, 0, false],
+  ['the intermediate buyer also needs relief', 5, 5, false],
+]) {
+  test('a booked relief shipment reaches the appropriate buyer when ' + scenario, () => {
+    const o = galaxy(), [source, near, far, other] = fixedStops(o);
+    const g = source.good; o.G.cap = 1; source.stock = 1;
+    for (const buyer of [near, far]) { want(buyer, g, 0); want(buyer, other.good, 0); }
+    far.orders[g] = 1; far.orders[other.good] = 5;
+    const route = o.createRoute([source, near, far]), [ship] = o.shipsOn(route);
+    run(o, 1);
+    assert.equal(ship.cargo[0].to, far); assert.equal(far.res[g], 1);
+    near.orders[g] = 1; near.orders[other.good] = nearBacklog; far.orders[other.good] = farBacklog;
+    run(o, 25);
+    assert.equal(far.orders[g], deliverFar ? 0 : 1);
+    assert.equal(near.orders[g], deliverFar ? 1 : 0);
+    assert.equal(far.res[g], 0); assert.equal(o.G.delivered, 1);
+  });
+}
+
 test('a world buys stock already dropped in its depot when it develops local demand', () => {
   const o = galaxy(), [a,hub,b] = fixedStops(o), g = a.good;
   o.G.credits = 1000;

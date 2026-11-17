@@ -44,6 +44,7 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 - **Everything is counted in units you can see.** A world's level (1 to 3) is how many units of its good it makes: it is drawn that size, with that many shapes on it. Each shape in a world's BUYS tag is one unit it wants. One unit made covers one unit wanted, so supply and demand can be balanced by counting shapes.
 - **The network keeps two units spare.** A world joins at level 1 and arrives buying one unit of something the network has spare. Midway between arrivals an existing world grows a level: it makes one more unit and wants one more. Nothing a world already buys is ever taken away.
 - **Sometimes demand runs ahead.** A growing world may want the good the next newcomer will sell before that world has joined, leaving that good one unit short until it arrives. The message says so, and the map shows what the next world sells.
+- **Every good has a buyer.** Fuel first appears with the seventh world. The world that grows just before it always wants Fuel, so the first Fuel world arrives to a waiting buyer, and no good is ever made with nobody to buy it.
 - **Production is just in time.** A world only releases a unit when an order it can reach by its own routes is waiting, so stock builds up only where deliveries fall behind. A world with nothing it can reach still keeps up to three units on show while orders for its good wait somewhere, so an untapped seller is visible.
 - **Select a route to check its balance.** Each good shows estimated sustainable supply at its buyers, their current demand, and units this line moved during the last 60 game seconds (deliveries and depot handoffs). Shared suppliers, depot chains, surges and crunches feed into the estimate. The fleet reading uses recent trips, idle time and freight waiting for pickup to flag a likely spare ship or the need for another.
 - **Freighters** compare expected credits per game minute in either direction, including possible return trips. They plan around cargo already aboard, open orders, and stock waiting at later stops. A load due at the next stop frees its slot there. A longer haul can leave room for several shorter deliveries. Only loading a real unit reserves an order.
@@ -88,7 +89,7 @@ npm test
 | --- | --- |
 | `tests/bot.js` | A crude bot plays several fast-forwarded runs and reports how long it survives. Also tests a relay through two depots. |
 | `tests/stress.js` | Random routes, removals and depots for 15 minutes, checking the order bookkeeping stays consistent. |
-| `tests/balance.js` | Runs the unit ledger unplayed and checks its rules: two units spare, never more than one short, newcomers arrive buying, nothing is taken away. |
+| `tests/balance.js` | Runs the unit ledger unplayed over 40 galaxies and checks its rules: two units spare, never more than one short, newcomers arrive buying, every good made has a buyer, nothing is taken away. |
 | `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. On phone sizes: the map holds still when a route panel opens, and the shop stays in view. Delete closes a route only on a second press. |
 | `tests/audio.js` | Plays in real time with sound on and checks for errors. |
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |

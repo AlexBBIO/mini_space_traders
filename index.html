@@ -364,9 +364,11 @@ function setNext() { // which world joins next (the nearest the middle of the ne
   if (d) { if (G.nextGood == null) G.nextGood = chooseGood(); d.good = G.nextGood; }
   G.next = d;
 }
+const unbought = g => G.planets.some(p => p.good === g) && !G.planets.some(p => p.wants.includes(g)); // a good that is made, but that no world buys
 function chooseGood() { // the good the network makes least of, so long as the newcomer will find something else to buy. Fuel first appears with the seventh world
   const all = [...Array(G.planets.length >= 6 ? 5 : 4).keys()], sup = all.map(g => G.planets.reduce((n, p) => n + (p.good === g ? p.level : 0), 0));
-  const ok = all.filter(g => G.pool.some((v, h) => h !== g && v > 0)), c = ok.length ? ok : all, mn = Math.min(...c.map(g => sup[g]));
+  const can = all.filter(g => G.pool.some((v, h) => h !== g && v > 0)), sold = can.filter(g => !unbought(g)); // never a second seller of a good that still has no buyer
+  const c = sold.length ? sold : can.length ? can : all, mn = Math.min(...c.map(g => sup[g]));
   return pick(c.filter(g => sup[g] === mn), RP);
 }
 function place(p) { p.x = Math.cos(p.ang) * p.r; p.y = Math.sin(p.ang) * p.r; }
@@ -379,9 +381,12 @@ function nameIt() {
    - A world joins at level 1: its one unit goes into the pool, and it starts buying one unit of another good out of the pool.
    - A world grows a level: it makes one more unit (into the pool) and buys one more unit (out of the pool), of a new good or more of one it has.
    - Now and then a world grows by wanting the good the next newcomer will sell, before that world has joined. That good is then one unit short
-     until it arrives: pool[g] is -1 for that while, and never lower. */
-function spareFor(p) { // the good p should buy its next unit of: whichever other good has most to spare, preferring one it does not buy yet
+     until it arrives: pool[g] is -1 for that while, and never lower.
+   - A good never sits unbought. When the next newcomer brings a good the network has never had (Fuel, with the seventh world), the world that
+     grows before it always wants that good, so its first seller arrives to a waiting buyer. */
+function spareFor(p) { // the good p should buy its next unit of: whichever other good has most to spare, preferring one it does not buy yet. A good with no buyer at all comes first
   const can = G.pool.map((v, g) => g).filter(g => g !== p.good && G.pool[g] > 0); if (!can.length) return null;
+  const lone = can.filter(unbought); if (lone.length) return pick(lone, RP);
   const top = Math.max(...can.map(g => G.pool[g])), best = can.filter(g => G.pool[g] === top), fresh = best.filter(g => !p.wants.includes(g));
   return pick(fresh.length ? fresh : best, RP);
 }
@@ -391,11 +396,12 @@ function buyUnit(p, g) { // p wants one more unit of g from now on
 }
 function grow() { // one world goes up a level
   for (const p of shuffle(G.planets.filter(p => p.level < MAX_LEVEL && G.sec - p.bornS > 40), RP)) {
-    const ahead = G.next && G.nextGood !== p.good && G.pool[G.nextGood] === 0 && G.nextPlanetT - G.sec < 45 && RP() < .4; // it wants what the next world will bring
+    const debut = G.next && !G.planets.some(q => q.good === G.nextGood); // the next world brings a good the network has never had: it must arrive to a waiting buyer
+    const ahead = G.next && G.nextGood !== p.good && G.pool[G.nextGood] === 0 && G.nextPlanetT - G.sec < 45 && (debut || RP() < .4); // it wants what the next world will bring
     G.pool[p.good]++; const g = ahead ? G.nextGood : spareFor(p);
     if (g == null || (G.next && !G.pool.some((v, h) => h !== G.nextGood && v - (h === g) > 0))) { G.pool[p.good]--; continue; } // nothing to buy, or it would leave the next newcomer nothing to buy
     p.level++; p.grewAt = G.t; buyUnit(p, g); sfx('join'); logEvent('grew to level ' + p.level + ', wants ' + GOODS[g] + (ahead ? ' (ahead of supply)' : ''), p.name);
-    toast(ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
+    toast(ahead && debut ? `${p.name} has grown. It wants ${gn(g)}, a new good that arrives when ${G.next.name} joins.` : ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
 }
 /* How many open orders put a world in trouble: 2.7 for each unit it makes, rounded, and never fewer than six. A bigger world wants more, so its
    orders come in faster; the limit grows with it, and a level 3 world can carry eight. Orders stop arriving ORD_ROOM above the limit. */
@@ -1431,7 +1437,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 31, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 32, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches

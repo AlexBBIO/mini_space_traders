@@ -1,2 +1,5 @@
 tests/
 build.js
+package.json
+package-lock.json
+.github/

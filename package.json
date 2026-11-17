@@ -1,0 +1,12 @@
+{
+  "name": "orbit-lanes",
+  "private": true,
+  "description": "A small browser game about running freight in a slowly turning galaxy.",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node tests/all.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

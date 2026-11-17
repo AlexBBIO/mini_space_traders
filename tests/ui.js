@@ -48,11 +48,16 @@ const assert = require('node:assert/strict');
     await pg.mouse.up();
     await pg.waitForSelector('#routes .panel');
     assert.equal(await pg.evaluate(() => __ol.G.sel.stops.length), 2);
+    // With a route's panel open the shop must still be in view, so a freighter can be bought for that route without scrolling.
+    for (const id of ['#buy-ship', '#buy-eng']) {
+      const box = await pg.locator(id).boundingBox(), clip = await pg.locator('.dock-content').boundingBox();
+      assert.ok(box.y >= clip.y - .5 && box.y + box.height <= Math.min(clip.y + clip.height, width === 320 ? 568 : 844) + .5, 'the shop is out of view while a route is selected');
+    }
     // Let the first-route tutorial finish its camera adjustment before toggling the report.
     await pg.waitForFunction(() => {
-      const y = __ol.toScreen(__ol.G.planets[0])[1], delta = Math.abs(y - window.lastWorldY);
-      window.lastWorldY = y;
-      return delta < .001;
+      const [x, y] = __ol.toScreen(__ol.G.planets[0]), [px, py] = window.lastWorld || [NaN, NaN]; // both axes: one can come to rest while the other is still easing
+      window.lastWorld = [x, y];
+      return Math.hypot(x - px, y - py) < .001;
     }, null, { polling: 'raf' });
     const reference = await point(0);
     for (const state of ['hidden', 'visible']) {
@@ -85,6 +90,15 @@ const assert = require('node:assert/strict');
       assert.ok(labels.every(p => Math.abs(p.dx) < .01 && p.dy > 10), 'world name left its anchor');
     }
   }
+  // Delete closes the selected route only on a second press.
+  const routeCount = () => pg.evaluate(() => __ol.G.routes.length);
+  assert.equal(await routeCount(), 1);
+  await pg.keyboard.press('Delete');
+  assert.equal(await routeCount(), 1, 'one press of Delete removed the route');
+  assert.match(await pg.textContent('#toasts'), /again to remove route 1/);
+  await pg.keyboard.press('Delete');
+  assert.equal(await routeCount(), 0, 'a second press of Delete did not remove the route');
   assert.deepEqual(errs, []);
+  console.log('pass');
   await b.close();
 })();

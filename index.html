@@ -144,6 +144,7 @@ button.toast:hover { border-color: var(--ink); }
   .dock { align-items: stretch; gap: 5px; padding-block: 6px 8px; }
   .route-list { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
   .route-list .chip { flex: none; }
+  .dock .shop { position: sticky; bottom: 0; z-index: 1; background: var(--bg); padding-top: 4px; box-shadow: 0 -6px 6px -2px var(--bg); } /* the route panel scrolls behind it, so buying never needs a scroll */
 }
 @media (min-width: 560px) and (max-width: 899px) and (min-height: 501px) {
   .dock { width: min(100%, 700px); margin-inline: auto; }
@@ -155,7 +156,7 @@ button.toast:hover { border-color: var(--ink); }
   .dock { inset: 0; width: auto; align-items: stretch; justify-content: flex-start; gap: 12px; padding-block: 4px 14px; overflow-y: auto; overscroll-behavior: contain; }
   .dock-content { display: contents; }
   .dock .row { justify-content: flex-start; }
-  .dock .shop { grid-template-columns: 1fr; gap: 6px; }
+  .dock .shop { grid-template-columns: 1fr; gap: 6px; position: static; background: none; padding-top: 0; box-shadow: none; }
   .shop .buy { display: flex; justify-content: space-between; padding: 7px 10px; font-size: 14px; }
   .shop .pool, #info { text-align: left; }
   .dock #info { position: static; order: 3; flex: none; width: auto; max-width: none; margin: 0; padding: 0; background: none; font-size: inherit; }
@@ -289,7 +290,7 @@ const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
-const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5;
+const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
@@ -324,7 +325,7 @@ function readColors() {
 function newGame(day) { // day: 'YYYY-MM-DD' deals that day's galaxy; nothing deals a random one
   const seed = day ? 'day:' + day : 'r' + Math.random().toString(36).slice(2, 10);
   [RM, RP, RE, RS] = ['map', 'plan', 'event', 'noise'].map(k => stream(hash(seed + '/' + k)));
-  G = { seed, day: day || null, sec: 0, overAt: 0, t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, routes: [], ships: [], reserve: 4, licences: 3,
+  G = { seed, day: day || null, sec: 0, overAt: 0, t: 0, credits: 60, delivered: 0, earned: 0, planets: [], dormant: [], dust: [], next: null, routes: [], ships: [], reserve: 4, cooling: [], licences: 3,
     bought: { ship: 0, lic: 0, hold: 0, eng: 0, depot: 0 }, cap: 6, accel: 12, nextPlanetT: 60, rush: null, crunch: null, nextRushT: 75,
     over: null, sel: null, nextId: 1, floats: [], active: 0, warned: new Set(), pool: [0, 0, 0, 0, 0], nextGood: null, nextGrowT: Infinity, diagT: 0, diag: GOODS.map(() => ({ dry: 0, flatOut: 0, overAsked: 0, crunch: 0, unlinked: 0, sellerElsewhere: 0, held: 0 })) };
   makeGalaxy();
@@ -485,7 +486,7 @@ function step(dt) {
       else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2, RS); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
   G.diagT += dt; if (G.diagT >= 1) { diagTick(gap, G.diagT); G.diagT = 0; }
   for (const p of G.planets) {
-    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`${p.name} pays ◈${DISTRESS_PREMIUM} extra per delivery at ${CRIT} or more orders.`, true, p); sfx('warn'); } }
+    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`${p.name} has ${CRIT} or more orders waiting. Trade collapses if that lasts a minute. It pays ◈${DISTRESS_PREMIUM} extra per delivery until then.`, true, p); sfx('warn'); } }
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
@@ -778,15 +779,19 @@ function buildDepot(p) {
 }
 const shipsOn = r => G.ships.filter(s => s.route === r);
 function addShip(r) {
-  if (G.reserve <= 0) return false; G.reserve--;
-  r.fleetSamples.length = 0;
+  if (G.reserve <= 0) return false;
+  // A freighter recalled to the reserve needs REDEPLOY seconds before it can work again, so recalling and reassigning one is no shortcut across a route.
+  // Fresh freighters go out first; if only recalled ones are left, the one that has waited longest goes and sits out the rest of its wait at the dock.
+  G.cooling = G.cooling.filter(t => t > G.t).sort((a, b) => a - b);
+  const wait = G.cooling.length >= G.reserve ? G.cooling.shift() - G.t : 0;
+  G.reserve--; r.fleetSamples.length = 0;
   const idx = shipsOn(r).length % 2 ? r.stops.length - 1 : 0, p = r.stops[idx];
-  G.ships.push({ route: r, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0, trail: [], trT: 0 });
+  G.ships.push({ route: r, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3 + wait, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0, trail: [], trT: 0 });
   return true;
 }
-function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; r.fleetSamples.length = 0; }
+function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; G.cooling.push(G.t + REDEPLOY); r.fleetSamples.length = 0; }
 function removeRoute(r) {
-  for (const s of shipsOn(r)) s.cargo.forEach(release);
+  for (const s of shipsOn(r)) { s.cargo.forEach(release); G.cooling.push(G.t + REDEPLOY); }
   G.reserve += shipsOn(r).length; G.ships = G.ships.filter(s => s.route !== r);
   if (LOG.run && !manual) LOG.run.routesRemoved++;
   G.routes.splice(G.routes.indexOf(r), 1); G.licences++; if (G.sel === r) G.sel = null;
@@ -1111,7 +1116,7 @@ function syncHud() {
   let h = chips ? '<div class="route-list">' + chips + '</div>' : '';
   if (G.sel) { const r = G.sel, n = shipsOn(r).length;
     h += `<div class="panel"><b class="route-title">Route ${r.n}</b>
-      <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
+      <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" title="Recall a freighter to the reserve. It needs ${REDEPLOY} seconds before it can fly again" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
       <div class="route-path"><span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
         <button class="rm" data-act="remove">Remove route</button></div>
       <div class="live" id="rlive"></div></div>`; }
@@ -1265,13 +1270,15 @@ for (const k of ['ship', 'lic', 'hold', 'eng']) $('buy-' + k).addEventListener('
 $('buy-depot').addEventListener('click', () => { placing = !placing && G.credits >= cost('depot'); });
 function setSpeed(v) { if (v) lastSpeed = v; speed = v; for (let i = 0; i < 4; i++) $('sp' + i).setAttribute('aria-pressed', i === v); }
 for (let i = 0; i < 4; i++) $('sp' + i).addEventListener('click', () => setSpeed(i === 0 && speed === 0 ? lastSpeed : i));
+let delArm = null; // the route a first press of Delete has marked for removal
 addEventListener('keydown', e => {
   if (!started || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' && e.code === 'Space') return;
   if (e.code === 'Space') { e.preventDefault(); setSpeed(speed ? 0 : lastSpeed); }
   else if (['1', '2', '3'].includes(e.key)) setSpeed(+e.key);
   else if (G.sel && (e.key === '+' || e.key === '=')) addShip(G.sel);
   else if (G.sel && e.key === '-') removeShip(G.sel);
-  else if (G.sel && (e.key === 'Delete' || e.key === 'Backspace')) removeRoute(G.sel);
+  else if (G.sel && (e.key === 'Delete' || e.key === 'Backspace')) { const now = performance.now(); // a second press within three seconds, so a stray key cannot close a route
+    if (delArm && delArm.r === G.sel && now - delArm.at < 3000) { delArm = null; removeRoute(G.sel); } else { delArm = { r: G.sel, at: now }; toast(`Press ${e.key === 'Delete' ? 'Delete' : 'Backspace'} again to remove route ${G.sel.n}.`); } }
   else if (e.key === 'Escape') { G.sel = null; placing = false; }
 });
 
@@ -1421,7 +1428,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 29, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 30, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
@@ -1440,8 +1447,9 @@ function logSample() {
 function logSave() {
   const r = LOG.run; if (!(LOG.db || LOG.api) || !r || manual) return; if (LOG.busy) { LOG.dirty = true; return; } LOG.busy = true;
   r.seconds = Math.round(G.t); r.delivered = G.delivered; r.earned = G.earned; r.music = A.music; r.soundEffects = A.sfx; r.saved = new Date().toISOString();
+  const body = LOG.db ? '' : JSON.stringify({ id: LOG.id, run: r }); // keepalive lets a save outlive the page, but browsers refuse it for bodies over 64 KB, so a long run's record goes as an ordinary request
   const sent = LOG.db ? LOG.db.doc('runs/' + LOG.id).set(JSON.parse(JSON.stringify(r)))
-    : fetch('api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: LOG.id, run: r }), keepalive: true }).then(a => { if (a.status === 404 || a.status === 503) LOG.api = false; }); // no log store on this site: stop trying
+    : fetch('api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 }).then(a => { if (a.status === 404 || a.status === 503) LOG.api = false; }); // no log store on this site: stop trying
   sent.catch(() => {}).then(() => { LOG.busy = false; if (LOG.dirty) { LOG.dirty = false; logSave(); } });
 }
 function logTick(dt) { // called every frame of a live run
@@ -1535,7 +1543,8 @@ addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
 new ResizeObserver(() => { cam.fast = 45; }).observe($('dock-area'));
 newGame(today()); resize(); aimCamera(true); requestAnimationFrame(frame); // today's galaxy turns behind the title card
 lbLoad(); // after the first galaxy is dealt: the boards are drawn against it
-window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
+// hooks for the test scripts: on a page opened from disk or served locally, never on the hosted site
+if (location.protocol !== 'https:') window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
 })();
 </script>
 

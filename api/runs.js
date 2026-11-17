@@ -38,7 +38,9 @@ module.exports = async (req, res) => {
     const ip = String(req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim(), limit = 'orbit-lanes:runrate:' + ip;
     const [n] = await redis([['INCR', limit], ['EXPIRE', limit, 60]]);
     if (n > 20) return res.status(429).json({ error: 'Too many saves at once.' });
-    await redis([['SET', RUN + id, text, 'EX', DAYS * 86400], ['ZADD', INDEX, Date.now(), id], ['ZREMRANGEBYRANK', INDEX, 0, -(KEEP + 1)]]);
+    // Runs that fall off the end of the list take their records with them. Without that the records would sit in the database (which the leaderboard shares) until they expired.
+    const out = await redis([['SET', RUN + id, text, 'EX', DAYS * 86400], ['ZADD', INDEX, Date.now(), id], ['ZRANGE', INDEX, 0, -(KEEP + 1)], ['ZREMRANGEBYRANK', INDEX, 0, -(KEEP + 1)]]);
+    const dropped = (out[2] || []).filter(i => i !== id); if (dropped.length) await redis([['DEL', ...dropped.map(i => RUN + i)]]);
     return res.status(200).json({ saved: id });
   } catch (e) { return res.status(502).json({ error: 'Run logs are unavailable right now.' }); }
 };

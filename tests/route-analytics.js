@@ -373,3 +373,23 @@ test('two ships at different suppliers can forecast the same buyer but only one 
   assert.equal(route.sold.length, 1);
   assert.equal(left.stock + right.stock, 1);
 });
+
+test('a recalled freighter waits before it can fly again, and a fresh one does not', () => {
+  const o = galaxy(), G = o.G, [a, b] = G.planets;
+  want(b, a.good);
+  const r = o.createRoute([a, b]);
+  run(o, 5);
+  o.removeShip(r); G.reserve = 1; // only the recalled freighter is left in the reserve
+  o.addShip(r);
+  const recalled = o.shipsOn(r)[0];
+  assert.ok(recalled.dockT > 5, 'the recalled freighter went straight back to work');
+  G.reserve = 1; o.addShip(r); // a second freighter, never recalled
+  assert.ok(o.shipsOn(r)[1].dockT < 1, 'a fresh freighter was held back');
+  a.stock = 2; b.orders[a.good] = 2; // work is waiting, and the fresh freighter is on the far side
+  o.removeShip(r); // recalls the fresh one, so only the waiting freighter can take the load
+  run(o, 4);
+  assert.equal(recalled.state, 'dock');
+  assert.equal(recalled.cargo.length, 0);
+  run(o, 30);
+  assert.ok(G.delivered > 0);
+});

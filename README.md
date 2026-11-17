@@ -50,7 +50,8 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 - **Depots** let one route leave goods for another route to carry on. A world also fills its own orders straight from its depot. If a freighter already booked the order, its cargo can replenish the depot. The buyer pays once.
 - **Prices and events.** A unit pays four credits plus the number of outstanding orders for its good. A demand surge doubles that price. A world with six or more outstanding orders across all goods adds two credits per delivery while the backlog lasts. Supply crunches temporarily reduce production.
 - **The galaxy** exists in full from the start. Most worlds are dormant; the one nearest your network wakes next. It rotates very slowly, the inner parts a little faster.
-- **You lose** when six or more open orders sit at one world for a minute. The map dims, shock rings roll out from that world and the view closes in on it before the summary appears.
+- **Freighters redeploy slowly.** A freighter recalled to the reserve, or freed by closing its route, needs six seconds before it can fly again, so recalling and reassigning one is no shortcut across a route. Freighters that were never recalled go out first.
+- **You lose** when six or more open orders sit at one world for a minute. A warning says so the moment a world reaches six. The map dims, shock rings roll out from that world and the view closes in on it before the summary appears.
 - **The day's galaxy is dealt from the date.** The map, what every world sells and buys, the order worlds join and grow in, and the events all come from a seed, and the timetable is worked through on whole seconds, so it unfolds the same on any browser at any frame rate, whatever the player does. Only the split-second jitter in when individual orders appear differs between players.
 
 ## Files
@@ -62,7 +63,9 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 | `build.js` | Rebuilds `index.html` after editing `game.html`. |
 | `api/scores.js` | The leaderboard endpoint, run by Vercel as a serverless function. |
 | `api/runs.js` | The run-log endpoint. |
-| `tests/` | Playwright scripts used while developing. |
+| `tests/` | The simulation tests and the Playwright scripts. `tests/all.js` runs them all. |
+| `package.json` | Names Playwright for the tests and gives `npm test`. The game itself needs nothing installed, and Vercel never sees this file. |
+| `.github/workflows/test.yml` | Runs `npm test` on pull requests and on pushes to `main`. |
 
 After changing `game.html`:
 
@@ -72,14 +75,20 @@ node build.js
 
 ## Tests
 
-The route analytics checks run with `node --test tests/route-analytics.js`. The browser scripts below use [Playwright](https://playwright.dev) (`npm i playwright`) and run one at a time with `node`.
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+`npm test` checks that `index.html` is built from the current `game.html`, then runs the simulation tests (`node --test tests/route-analytics.js`, which need no browser) and each browser script below. The scripts use [Playwright](https://playwright.dev) and can also be run one at a time with `node`. They drive the game through `window.__ol`, which exists only on a page opened from disk or served locally, never on the hosted site.
 
 | Script | What it checks |
 | --- | --- |
 | `tests/bot.js` | A crude bot plays several fast-forwarded runs and reports how long it survives. Also tests a relay through two depots. |
 | `tests/stress.js` | Random routes, removals and depots for 15 minutes, checking the order bookkeeping stays consistent. |
 | `tests/balance.js` | Runs the unit ledger unplayed and checks its rules: two units spare, never more than one short, newcomers arrive buying, nothing is taken away. |
-| `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. |
+| `tests/ui.js` | Real mouse input: drawing a route, zooming, panning. On phone sizes: the map holds still when a route panel opens, and the shop stays in view. Delete closes a route only on a second press. |
 | `tests/audio.js` | Plays in real time with sound on and checks for errors. |
 | `tests/logging.js` | Plays a run to collapse and inspects the saved run record. |
 | `tests/depot.js` | A depot world as a hub: one route in, another out to a buyer the first route never visits. |
@@ -87,7 +96,7 @@ The route analytics checks run with `node --test tests/route-analytics.js`. The 
 | `tests/shape.js` | Measures how clustered the network is as it grows (1 = a round blob, 3 or more = a line). |
 | `tests/stops.js` | Takes worlds off a route with a right-click and with the route panel's buttons. |
 | `tests/daily.js` | Plays today's galaxy at different frame rates, unplayed and played, and checks the map, goods, growth and events are identical; another day and a random galaxy must differ. |
-| `tests/runs.js` | Checks the run-log API against a stand-in store, then plays a run that saves to it and copies its record. |
+| `tests/runs.js` | Checks the run-log API against a stand-in store, including that runs dropped from the list are deleted, then plays a run that saves to it (with a record over 64 KB) and copies its record. |
 
 The bot is a floor for difficulty, not a measure of how the game feels.
 
@@ -96,5 +105,5 @@ The bot is a floor for difficulty, not a measure of how the game feels.
 The game keeps a record of each run: pacing snapshots, purchases, events, each good's supply, demand and missing links, and what the collapsing world was short of. It holds nothing about the player.
 
 - Opened as a Claude artifact, the record is saved to that artifact's own database.
-- Hosted on Vercel, it is posted to `api/runs.js`, which keeps the last 60 runs for 30 days in the same Upstash database as the leaderboard. `GET /api/runs` lists them, `GET /api/runs?latest=1` returns the newest in full, and `GET /api/runs?id=...` returns one. Without a database nothing is kept.
+- Hosted on Vercel, it is posted to `api/runs.js`, which keeps the last 60 runs for 30 days in the same Upstash database as the leaderboard and deletes a run's record when it drops off that list. `GET /api/runs` lists them, `GET /api/runs?latest=1` returns the newest in full, and `GET /api/runs?id=...` returns one. Without a database nothing is kept.
 - Anywhere, **Copy run log** on the end screen copies the record as text.

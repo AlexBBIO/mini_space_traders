@@ -393,3 +393,24 @@ test('a recalled freighter waits before it can fly again, and a fresh one does n
   run(o, 30);
   assert.ok(G.delivered > 0);
 });
+
+test('a bigger world can carry more open orders before it is in trouble', () => {
+  const o = galaxy(), G = o.G, [small, mid, big] = G.planets;
+  small.level = 1; mid.level = 2; big.level = 3;
+  for (const p of [small, mid, big]) { const g = (p.good + 1) % 4; want(p, g, 0); p.orders[g] = 8; } // eight orders each, and no more arriving
+  run(o, 5);
+  assert.ok(small.over > 0 && mid.over > 0, 'six is the limit at levels 1 and 2');
+  assert.equal(big.over, 0, 'a level 3 world is in trouble at eight orders');
+  big.orders[big.wants[0]] = 9;
+  run(o, 5);
+  assert.ok(big.over > 0, 'nine is the limit at level 3');
+});
+
+test('orders stop arriving three above a world\'s limit', () => {
+  const o = galaxy(), G = o.G, [mid, big] = G.planets;
+  mid.level = 2; big.level = 3;
+  for (const p of [mid, big]) want(p, (p.good + 1) % 4, 40);
+  for (let i = 0; i < 400; i++) { o.step(.05); for (const p of G.planets) p.over = 0; }
+  assert.equal(mid.orders[mid.wants[0]], 9);
+  assert.equal(big.orders[big.wants[0]], 12);
+});

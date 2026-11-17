@@ -282,7 +282,7 @@ const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
-const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, ORD_CAP = 9, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
+const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 3, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
@@ -389,6 +389,9 @@ function grow() { // one world goes up a level
     p.level++; p.grewAt = G.t; buyUnit(p, g); sfx('join'); logEvent('grew to level ' + p.level + ', wants ' + GOODS[g] + (ahead ? ' (ahead of supply)' : ''), p.name);
     toast(ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
 }
+/* How many open orders put a world in trouble: three for each unit it makes, and never fewer than six. A bigger world wants more, so its orders
+   come in faster; the limit grows with it, and a level 3 world can carry nine. Orders stop arriving ORD_ROOM above the limit. */
+const crit = p => Math.max(CRIT, CRIT_PER_LEVEL * p.level);
 const ordersOf = (p, g) => p.orders[g] || 0;
 const totalOrders = p => p.wants.reduce((n, g) => n + ordersOf(p, g), 0);
 const resOf = (p, g) => p.res[g] || 0, open = (p, g) => ordersOf(p, g) - resOf(p, g); // open = orders with no unit on the way yet
@@ -468,7 +471,7 @@ function step(dt) {
   for (const o of G.ships) for (const c of o.cargo) gap[c.g]--;
   for (const p of G.planets) for (const g of p.wants) { // demand leads: each good a world buys ticks up at its fixed rate, faster during a surge
     p.accD[g] += demandRate(p, g) * tempo * dt;
-    if (p.accD[g] >= 1) { if (totalOrders(p) < ORD_CAP) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2, RS); } else p.accD[g] = 1; } }
+    if (p.accD[g] >= 1) { if (totalOrders(p) < crit(p) + ORD_ROOM) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2, RS); } else p.accD[g] = 1; } }
   for (const p of G.planets) if (p.depot && p.items.length) collectFromDepot(p);
   for (let n = G.planets.length, k0 = Math.floor(RS() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
     const p = G.planets[(k0 + k) % n], g = p.good;
@@ -478,7 +481,7 @@ function step(dt) {
       else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2, RS); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
   G.diagT += dt; if (G.diagT >= 1) { diagTick(gap, G.diagT); G.diagT = 0; }
   for (const p of G.planets) {
-    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`${p.name} has ${CRIT} or more orders waiting. Trade collapses if that lasts a minute. It pays ◈${DISTRESS_PREMIUM} extra per delivery until then.`, true, p); sfx('warn'); } }
+    if (totalOrders(p) >= crit(p)) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`${p.name} has ${crit(p)} or more orders waiting. Trade collapses if that lasts a minute. It pays ◈${DISTRESS_PREMIUM} extra per delivery until then.`, true, p); sfx('warn'); } }
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
@@ -543,7 +546,7 @@ function waitingUnits(r, p) {
 const DISTRESS_PREMIUM = 2;
 const RELAY_VALUE = 2; // planning estimate for helping an onward sale; a handoff earns no credits itself
 function salePrice(p, g, orders, worldOrders = totalOrders(p)) {
-  return (4 + orders) * (G.rush && G.rush.p === p && G.rush.g === g ? 2 : 1) + (worldOrders >= CRIT ? DISTRESS_PREMIUM : 0);
+  return (4 + orders) * (G.rush && G.rush.p === p && G.rush.g === g ? 2 : 1) + (worldOrders >= crit(p) ? DISTRESS_PREMIUM : 0);
 }
 function settleOrder(p, g) {
   const n = ordersOf(p, g), pay = salePrice(p, g, n);
@@ -709,8 +712,8 @@ function dockAction(s) {
     const c = s.cargo[k], g = c.g, n = ordersOf(p, g);
     if (!n) continue;
     // A healthy stop cannot take a unit still booked for a buyer in distress.
-    const bookedForRelief = !c.relay && c.to && c.to !== p && ordersOf(c.to, g) > 0 && totalOrders(c.to) >= CRIT;
-    if ((c.to === p && !c.relay) || (open(p, g) > 0 && (!bookedForRelief || totalOrders(p) >= CRIT))) {
+    const bookedForRelief = !c.relay && c.to && c.to !== p && ordersOf(c.to, g) > 0 && totalOrders(c.to) >= crit(c.to);
+    if ((c.to === p && !c.relay) || (open(p, g) > 0 && (!bookedForRelief || totalOrders(p) >= crit(p)))) {
       release(c); s.cargo.splice(k, 1); settleOrder(p, g);
       r.sold.push([G.t, g]); while (r.sold[0][0] < G.t - 60) r.sold.shift();
       s.dockT = HANDLING_TIME; return; }
@@ -1099,7 +1102,7 @@ function syncHud() {
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
   hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
   $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(supplyRate(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(demandRate(hp, g)) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'}${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(supplyRate(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(demandRate(hp, g)) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'} · in trouble at ${crit(hp)} open orders${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
   const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
   if (s === sig) return syncLive(); sig = s;
@@ -1420,7 +1423,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 30, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 31, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
@@ -1453,7 +1456,7 @@ const logRoutes = () => G.routes.map(r => ({ route: r.n, stops: r.stops.map(p =>
   deliveredLastMinute: r.sold.filter(e => e[0] > G.t - 60).length }));
 function logEnd() { // what the collapsing world was short of, and whether routes, freighters or stock were the missing piece
   const r = LOG.run, p = G.over; if (!r || !p) return; r.ended = true;
-  r.collapse = { world: p.name, joinedAt: Math.round(p.born), goods: p.wants.filter(g => ordersOf(p, g)).map(g => {
+  r.collapse = { world: p.name, level: p.level, ordersLimit: crit(p), joinedAt: Math.round(p.born), goods: p.wants.filter(g => ordersOf(p, g)).map(g => {
     const rs = G.routes.filter(q => q.stops.includes(p) && q.stops.some(z => z !== p && z.good === g)), sellers = [...new Set(rs.flatMap(q => q.stops.filter(z => z !== p && z.good === g)))];
     return { good: GOODS[g], orders: ordersOf(p, g), onTheWay: resOf(p, g), routesToASeller: rs.length, freightersOnThem: rs.reduce((n, q) => n + shipsOn(q).length, 0), stockAtThoseSellers: sellers.reduce((n, z) => n + z.stock, 0),
       crunchAtSeller: !!(G.crunch && sellers.includes(G.crunch.p)), surgeHere: !!(G.rush && G.rush.p === p && G.rush.g === g),

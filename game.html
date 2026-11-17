@@ -9,6 +9,7 @@
   --g0: #F0934A; --g1: #55A8EC; --g2: #77C261; --g3: #A884E8; --g4: #E56DBB; color-scheme: dark;
   --display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
   --ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --gutter: clamp(10px, 1.4vw, 22px); --rail: clamp(290px, 26vw, 370px);
 }
 
 html, body { height: 100%; }
@@ -66,31 +67,35 @@ button.toast:hover { border-color: var(--ink); }
 .chip.sel { border-color: var(--ink); }
 .chip.sel i { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .chip.idle { color: var(--danger); }
-.panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; background: var(--panel); border: 1px solid var(--ink); border-radius: 12px; padding: 6px 12px; max-width: 100%; }
-#info { min-height: 18px; color: var(--muted); font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
+.panel { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; width: 100%; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; }
+#routes { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; gap: 7px; justify-content: stretch; }
+.route-list { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+#info { color: var(--muted); font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; }
+#info:empty, #routes:empty { display: none; }
 #info b { color: var(--ink); }
-.flow { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.flows { display: flex; flex-wrap: wrap; gap: 3px 12px; justify-content: center; min-width: 0; }
-.panel .stops { color: var(--muted); min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.panel .stops button { border: 1px solid var(--line); background: none; border-radius: 8px; height: 26px; padding: 0 7px; color: var(--ink); font-weight: 500; white-space: nowrap; }
-.panel .stops button span { color: var(--danger); font-weight: 700; }
-.panel .note { color: var(--danger); font-weight: 600; }
-.live { flex-basis: 100%; display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12.5px; }
-.live:empty { display: none; }
-.live .row { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 8px; }
-.live .nums { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.live .short .nums { color: var(--danger); font-weight: 600; }
-.live .flow { white-space: normal; }
-.ships { display: flex; flex-wrap: wrap; gap: 4px; }
-.ship { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; min-height: 16px; }
-.ship small { color: var(--muted); font-size: 11px; margin-left: 2px; white-space: nowrap; }
-.stepper { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-.stepper button, .panel .rm { border: 1px solid var(--line); background: none; border-radius: 8px; height: 28px; min-width: 28px; font-weight: 700; }
-.panel .rm { padding: 0 10px; font-weight: 600; color: var(--danger); }
+.route-title { grid-area: 1 / 1; align-self: center; font-size: 15px; }
+.route-path, .live { grid-column: 1 / -1; }
+.route-path { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.panel .rm { border: 0; background: none; padding: 2px 0; font-size: 11px; color: var(--muted); }
+.panel .rm:hover, .panel .rm:focus-visible { color: var(--danger); }
+.panel .stops { color: var(--muted); min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-size: 12px; }
+.panel .stops button { border: 1px solid var(--line); background: none; border-radius: 6px; min-height: 24px; padding: 0 5px; color: var(--ink); white-space: nowrap; }
+.panel .stops button span { color: var(--muted); }
+.stepper { grid-area: 1 / 2; display: flex; align-items: center; align-self: center; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.stepper button { border: 1px solid var(--line); background: none; border-radius: 6px; height: 28px; min-width: 28px; font-weight: 700; }
 .stepper button:disabled { opacity: .35; cursor: default; }
-
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto; background: color-mix(in srgb, var(--bg) 78%, transparent); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 22px; max-width: 440px; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.live { min-width: 0; border-top: 1px solid var(--line); padding-top: 7px; font-size: 13px; }
+.route-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 3px 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.route-summary span { color: var(--muted); }
+.route-rates { border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; line-height: 1.35; }
+.route-rates th, .route-rates td { padding: 2px 0 2px 4px; text-align: right; }
+.route-rates th:first-child { padding-left: 0; text-align: left; }
+.route-rates thead { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.route-rates th { font-weight: 600; }
+.route-rates svg { width: 10px; height: 10px; margin-right: 5px; }
+.live .short { color: var(--danger); }
+.overlay { position: absolute; inset: 0; display: flex; padding: 16px; overflow-y: auto; background: color-mix(in srgb, var(--bg) 78%, transparent); }
+.card { box-sizing: border-box; margin: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: clamp(16px, 3vw, 26px); max-width: 490px; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .card h1 { font-family: var(--display); font-size: 28px; line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
 .card p { margin: 0; line-height: 1.5; }
 .card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; line-height: 1.45; }
@@ -117,26 +122,66 @@ button.toast:hover { border-color: var(--ink); }
 .lb form button:disabled { opacity: .45; cursor: default; }
 #lb-msg { font-size: 13px; color: var(--muted); min-height: 1.2em; }
 .result { display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
-@media (min-width: 900px) {
-  .dock { top: 62px; bottom: 0; left: auto; right: 0; width: 300px; box-sizing: border-box; align-items: stretch; justify-content: flex-start; gap: 12px; padding-left: 14px; padding-block: 4px 14px; overflow-y: auto; }
-  .dock .row { justify-content: flex-start; }
-  .dock .buy { flex: 1 1 100%; justify-content: space-between; }
-  .dock .pool { width: 100%; padding: 2px 0; }
-  .dock .panel { justify-content: flex-start; flex-direction: column; align-items: flex-start; width: 100%; box-sizing: border-box; padding: 10px 12px; }
-  .dock .flows { flex-direction: column; justify-content: flex-start; gap: 4px; }
-  .dock .flow { white-space: normal; }
-  #info { text-align: left; min-height: 54px; order: 3; }
-  #toasts { right: 316px; }
-  #hint { left: calc(50% - 150px); }
+.dock { box-sizing: border-box; pointer-events: auto; overflow-y: auto; overscroll-behavior: contain; max-height: 47%; padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right)); }
+.dock > * { flex: none; min-width: 0; }
+.dock .shop { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; width: 100%; gap: 4px; }
+.shop .pool { grid-column: 1 / -1; text-align: center; font-size: 12px; padding: 0; }
+.shop .buy { display: grid; grid-template-rows: 1fr auto; align-items: center; justify-items: center; gap: 2px; min-width: 0; padding: 4px 2px; line-height: 1.15; font-size: 12px; }
+@media (max-width: 899px) {
+  .dock { align-items: stretch; gap: 5px; padding-block: 6px 8px; }
+  .route-list { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
+  .route-list .chip { flex: none; }
 }
-@media (max-width: 560px) { .mark { display: none; } .stats { gap: 14px; } .stat b { font-size: 15px; } .pool { width: 100%; text-align: center; } .toast:nth-last-child(n+3) { display: none; } }
+@media (min-width: 560px) and (max-width: 899px) and (min-height: 501px) {
+  .dock { width: min(100%, 700px); margin-inline: auto; }
+  #routes:has(.panel) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; }
+  .route-list { flex-wrap: wrap; }
+}
+@media (min-width: 900px), (min-width: 560px) and (max-height: 500px) {
+  .dock { top: 62px; bottom: 0; left: auto; right: 0; width: var(--rail); max-height: none; align-items: stretch; justify-content: flex-start; gap: 12px; padding-block: 4px 14px; }
+  .dock .row { justify-content: flex-start; }
+  .dock .shop { grid-template-columns: 1fr; gap: 6px; }
+  .shop .buy { display: flex; justify-content: space-between; padding: 7px 10px; font-size: 14px; }
+  .shop .pool, #info { text-align: left; }
+  #info { order: 3; }
+  .route-list { flex-wrap: wrap; }
+  #toasts { right: calc(var(--rail) + 10px); }
+  #hint { left: calc((100% - var(--rail)) / 2); max-width: calc(100% - var(--rail) - 64px); }
+}
+@media (min-width: 560px) and (max-height: 500px) {
+  :root { --rail: clamp(248px, 34vw, 310px); }
+  .dock { gap: 7px; }
+  .panel { padding: 8px 10px; }
+  .dock .shop { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shop .buy { flex-wrap: wrap; font-size: 12px; padding: 4px 6px; }
+  .mark small { display: none; }
+}
+@media (min-width: 560px) and (max-width: 700px) {
+  .mark small { display: none; }
+}
+@media (max-width: 559px) {
+  .top { padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left)); gap: 5px; }
+  .mark { display: none; }
+  .stats { gap: clamp(6px, 2.2vw, 12px); }
+  .stat b { font-size: 15px; }
+  .stat small { font-size: 9px; }
+  .speed button { min-width: 28px; height: 28px; padding-inline: 4px; }
+  .zoom { left: 8px; top: 52px; }
+  .zoom.audio { top: 154px; }
+  #hint { top: 54px; max-width: calc(100% - 104px); font-size: 12px; }
+  #toasts { top: 54px; max-width: calc(100% - 68px); }
+  .toast:nth-last-child(n+3) { display: none; }
+  .panel { padding: 7px 10px; gap: 4px 8px; }
+  .route-summary { margin-bottom: 2px; }
+  .route-rates th, .route-rates td { padding-block: 1px; }
+}
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 </style>
 
 <div id="app">
   <canvas id="c" aria-label="Galaxy map"></canvas>
 
-  <div class="top">
+  <div class="top" id="hud-top">
     <span class="mark">Orbit Lanes<small id="s-mode"></small></span>
     <div class="stats">
       <span class="stat"><small>Credits</small><b id="s-cr">0</b></span>
@@ -168,7 +213,7 @@ button.toast:hover { border-color: var(--ink); }
   <div class="dock" id="dock">
     <div id="info" aria-live="off"></div>
     <div class="row" id="routes"></div>
-    <div class="row">
+    <div class="row shop">
       <span class="pool" id="pool"></span>
       <button class="buy" id="buy-ship" title="Adds a freighter to your reserve">Freighter <b></b></button>
       <button class="buy" id="buy-lic" title="Lets you open one more route">Route licence <b></b></button>
@@ -395,7 +440,10 @@ function plan(s) { // the run's timetable: worlds joining and growing, and event
   }
 }
 const tempoNow = () => .9 / Math.max(.8, 16 * .999 ** G.t); // .9: supply and demand both accrue 10% slower than first tuned
+const demandRate = (p, g) => (p.rate[g] || 0) * (G.rush && G.rush.p === p && G.rush.g === g ? 2.5 : 1);
+const supplyRate = p => out(p) * (G.crunch && G.crunch.p === p ? .2 : 1);
 function step(dt) {
+  const previousSecond = G.sec;
   G.t += dt;
   for (const p of G.planets) { p.ang += p.w * dt; place(p); }
   for (const p of G.dormant) { p.ang += p.w * dt; place(p); }
@@ -407,11 +455,11 @@ function step(dt) {
   for (const p of G.planets) { p.rc = reach(p); gap[p.good] -= Math.min(p.stock, p.rc); for (const g of p.items) gap[g]--; for (const g of p.wants) gap[g] += ordersOf(p, g); } // stock no route can deliver does not count against the orders
   for (const o of G.ships) for (const c of o.cargo) gap[c.g]--;
   for (const p of G.planets) for (const g of p.wants) { // demand leads: each good a world buys ticks up at its fixed rate, faster during a surge
-    p.accD[g] += p.rate[g] * tempo * dt * (G.rush && G.rush.p === p && G.rush.g === g ? 2.5 : 1);
+    p.accD[g] += demandRate(p, g) * tempo * dt;
     if (p.accD[g] >= 1) { if (totalOrders(p) < ORD_CAP) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2, RS); } else p.accD[g] = 1; } }
   for (let n = G.planets.length, k0 = Math.floor(RS() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
-    const p = G.planets[(k0 + k) % n], g = p.good, slow = G.crunch && G.crunch.p === p ? .2 : 1; // but releases one only for an order it can reach by route
-    p.accS = Math.min(1, p.accS + out(p) * tempo * dt * slow * (gap[g] >= 2 ? 1.6 : 1)); // and works faster while it has a backlog to catch up on
+    const p = G.planets[(k0 + k) % n], g = p.good;
+    p.accS = Math.min(1, p.accS + supplyRate(p) * tempo * dt * (gap[g] >= 2 ? 1.6 : 1)); // temporary catch-up production is above the sustainable rate
     if (p.accS >= 1 && gap[g] > 0 && p.stock < SLOTS) {
       if (p.stock < p.rc) { p.stock++; gap[g]--; p.accS -= rnd(.8, 1.2, RS); }
       else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2, RS); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
@@ -422,6 +470,7 @@ function step(dt) {
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
   for (const s of G.ships) stepShip(s, dt);
+  if (G.sec !== previousSecond) for (const r of G.routes) sampleFleet(r);
   for (const f of G.floats) f.t += dt; G.floats = G.floats.filter(f => f.t < 1);
 }
 function bend(a, b, side) { // control point of the lane between two worlds, bowed out just enough to clear the star
@@ -443,7 +492,7 @@ function stepShip(s, dt) {
   // attitude: nose along the lane while speeding up, then it flips and flies tail-first to brake. The drive only lights once the ship is lined up
   const want = Math.atan2(s.hy, s.hx) + (s.tau >= .5 ? Math.PI : 0), da = ((((want - s.face + Math.PI) % 6.2832) + 6.2832) % 6.2832) - Math.PI, turn = 2.6 * dt;
   s.face += Math.abs(da) <= turn ? da : Math.sign(da) * turn; s.burn = Math.abs(da) < .3 && s.tau < .985 ? 1 : 0;
-  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; s.from = null; }
+  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; s.from = null; s.route.lastArrival = G.t; }
 }
 /* How a freighter decides what to do at a stop. Every unit it loads is tied to one specific open order (or to a depot that
    will pass it on), so two freighters never load for the same order, and it only loads for stops ahead of it. */
@@ -485,7 +534,7 @@ function dockAction(s) {
       s.dockT = .13; return; }
   }
   if (p.depot) for (let k = 0; k < s.cargo.length; k++) { // leave relay goods at this world's depot for another route
-    const c = s.cargo[k]; if (c.relay && c.to === p && p.items.length < DEPOT_CAP) { s.cargo.splice(k, 1); p.items.push(c.g); s.dockT = .13; return; }
+    const c = s.cargo[k]; if (c.relay && c.to === p && p.items.length < DEPOT_CAP) { s.cargo.splice(k, 1); p.items.push(c.g); r.handoffs.push([G.t, c.g]); s.dockT = .13; return; }
   }
   for (let k = 0; k < s.cargo.length; k++) { // a unit whose buyer changed its mind finds another order on this route, waits for one, or is dumped
     const c = s.cargo[k]; if (c.to && (c.relay ? onward(c.to, c.g, r) : c.to.wants.includes(c.g))) continue;
@@ -513,13 +562,14 @@ function buy(k) {
   const c = cost(k); if (c == null || G.credits < c) return false;
   G.credits -= c; G.bought[k]++;
   if (k === 'ship') G.reserve++; else if (k === 'lic') G.licences++; else if (k === 'hold') G.cap += 2; else G.accel *= 1.4;
+  if (k === 'hold' || k === 'eng') for (const r of G.routes) r.fleetSamples.length = 0;
   sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: k });
   return true;
 }
 function createRoute(stops) {
   if (G.licences <= 0) { toast(`No free route licence. Buy one for ◈${cost('lic')} or remove a route.`); return null; }
   G.licences--; sfx('route'); if (LOG.run && !manual) LOG.run.routesOpened++; let n = 1; while (G.routes.some(r => r.n === n)) n++;
-  const r = { id: G.nextId++, n, stops: stops.slice(), born: G.t, sold: [] /* [time, good] of its deliveries in the last minute */ }; G.routes.push(r); G.sel = r;
+  const r = { id: G.nextId++, n, stops: stops.slice(), born: G.t, sold: [], handoffs: [], fleetSamples: [] }; G.routes.push(r); G.sel = r;
   if (G.reserve > 0) addShip(r); else toast('Route opened, but no freighter is in reserve to fly it.');
   return r;
 }
@@ -527,17 +577,19 @@ function buildDepot(p) {
   const c = cost('depot'); if (G.credits < c) { placing = false; return false; }
   if (p.depot) { toast(`${p.name} already has a depot.`, false, p); return false; }
   G.credits -= c; G.bought.depot++; placing = false; p.depot = true; p.items = []; sfx('buy'); if (LOG.run && !manual) LOG.run.purchases.push({ t: Math.round(G.t), item: 'depot', world: p.name });
+  for (const r of G.routes) if (r.stops.includes(p)) r.fleetSamples.length = 0;
   if (G.bought.depot === 1) toast(`Depot built at ${p.name}. A route can leave goods there for another route to carry on.`, false, p);
   return true;
 }
 const shipsOn = r => G.ships.filter(s => s.route === r);
 function addShip(r) {
   if (G.reserve <= 0) return false; G.reserve--;
+  r.fleetSamples.length = 0;
   const idx = shipsOn(r).length % 2 ? r.stops.length - 1 : 0, p = r.stops[idx];
   G.ships.push({ route: r, idx, prev: idx, dir: idx ? -1 : 1, cargo: [], state: 'dock', at: p, ox: 0, oy: -DOCK_R, dockT: .3, x: p.x, y: p.y, hx: 1, hy: 0, tau: 0, face: -1.5708, burn: 0, glow: 0, trail: [], trT: 0 });
   return true;
 }
-function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; }
+function removeShip(r) { const l = shipsOn(r); if (!l.length) return; l[l.length - 1].cargo.forEach(release); G.ships.splice(G.ships.indexOf(l[l.length - 1]), 1); G.reserve++; r.fleetSamples.length = 0; }
 function removeRoute(r) {
   for (const s of shipsOn(r)) s.cargo.forEach(release);
   G.reserve += shipsOn(r).length; G.ships = G.ships.filter(s => s.route !== r);
@@ -546,6 +598,7 @@ function removeRoute(r) {
 }
 function extendRoute(r, add, atStart) {
   add = add.filter(p => !r.stops.includes(p)).slice(0, MAX_STOPS - r.stops.length); if (!add.length) return;
+  r.fleetSamples.length = 0;
   if (atStart) { r.stops.unshift(...add.slice().reverse()); for (const s of shipsOn(r)) { s.idx += add.length; s.prev += add.length; } }
   else r.stops.push(...add);
 }
@@ -554,12 +607,13 @@ function insertStop(r, k, p) { // put a world into a route between stops k and k
   if (r.stops.length >= MAX_STOPS) { toast(`A route can have ${MAX_STOPS} stops at most.`); return false; }
   for (const s of shipsOn(r)) { const onLeg = s.state === 'fly' && s.prev !== s.idx && Math.min(s.prev, s.idx) === k;
     if (onLeg) { s.from = { id: 0, x: s.x, y: s.y }; s.idx = s.prev = k + 1; s.tau = 0; s.side = bend(s.from, p).sgn; } else { if (s.idx > k) s.idx++; if (s.prev > k) s.prev++; } }
-  r.stops.splice(k + 1, 0, p); sfx('route'); return true;
+  r.stops.splice(k + 1, 0, p); r.fleetSamples.length = 0; sfx('route'); return true;
 }
 function removeStop(r, p) { // take one world off a route; freighters at it or bound for it carry on to the next stop that is left
   const k = r.stops.indexOf(p); if (k < 0) return false;
   if (r.stops.length <= 2) { toast('A route needs two worlds. Remove the route to close it.'); return false; }
   r.stops.splice(k, 1);
+  r.fleetSamples.length = 0;
   for (const s of shipsOn(r)) {
     for (const c of s.cargo) if (c.to === p) { release(c); c.to = null; c.relay = false; } // units bound for it look for another buyer at the next stop
     if (!(s.state === 'dock' ? s.at === p : s.prev === k || s.idx === k)) { if (s.idx > k) s.idx--; if (s.prev > k) s.prev--; continue; }
@@ -599,12 +653,22 @@ function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1), b = cv.getBoundingClientRect();
   DPR = dpr; W = b.width; H = b.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); cam.fast = 45; // refit quickly after the window changes size
 }
-function fitView() { // the automatic view frames the worlds in the network, plus the next one due to join
-  const dock = $('dock'), wide = W >= 900; viewBot = wide ? H - 30 : H - dock.offsetHeight - 6; viewRight = wide ? W - dock.offsetWidth : W;
+const sideDock = matchMedia('(min-width: 900px), (min-width: 560px) and (max-height: 500px)');
+function fitView() { // frame the current network and the next world inside the exposed chart
+  const dock = $('dock'), hint = $('hint');
+  viewTop = $('hud-top').offsetHeight + 4;
+  viewBot = Math.max(viewTop + 1, sideDock.matches ? H - 8 : H - dock.offsetHeight - 4);
+  viewRight = Math.max(1, sideDock.matches ? W - dock.offsetWidth : W);
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const p of G.next ? G.planets.concat(G.next) : G.planets) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-  const hh = (viewBot - viewTop) / 2, hw = viewRight / 2 - 8, pad = 115;
-  return { s: Math.min(1.25, hw / ((x1 - x0) / 2 + pad), hh / ((y1 - y0) / 2 + pad)), mx: (x0 + x1) / 2, my: (y0 + y1) / 2, vx: viewRight / 2, vy: viewTop + hh, min: Math.min(hw, hh) / (GAL_R + 80) };
+  const left = Math.min(60, viewRight * .18), right = Math.min(36, viewRight * .1);
+  const hintBottom = hint.hidden ? 0 : (hint.offsetTop || 0) + hint.offsetHeight;
+  const labelMargin = Math.min(50, (viewBot - viewTop) * .14);
+  const top = Math.max(viewTop, hintBottom) + labelMargin, bottom = viewBot - labelMargin;
+  const roomX = Math.max(1, viewRight - left - right), roomY = Math.max(1, bottom - top);
+  return { s: Math.min(1.35, roomX / Math.max(1, x1 - x0), roomY / Math.max(1, y1 - y0)),
+    mx: (x0 + x1) / 2, my: (y0 + y1) / 2, vx: left + roomX / 2, vy: top + roomY / 2,
+    min: Math.min(roomX, roomY) / (2 * (GAL_R + 80)) };
 }
 function aimCamera(snap) {
   const f = fitView();
@@ -612,7 +676,7 @@ function aimCamera(snap) {
   if (snap || !cam.manual) { const k = snap ? 1 : cam.fast > 0 ? .16 : .03, k2 = snap ? 1 : cam.fast > 0 ? .25 : .08; if (cam.fast > 0) cam.fast--;
     cam.manual = false; cam.s += (f.s - cam.s) * k; cam.cx += (f.vx - f.mx * cam.s - cam.cx) * k2; cam.cy += (f.vy - f.my * cam.s - cam.cy) * k2; }
   else { const m = GAL_R * cam.s; cam.cx = Math.max(f.vx - m, Math.min(f.vx + m, cam.cx)); cam.cy = Math.max(f.vy - m, Math.min(f.vy + m, cam.cy)); }
-  U = Math.max(.55, Math.min(1.15, cam.s * .9)); nameFont = Math.max(12, 10 / U); // drawing scale for worlds, labels and freighters; names never drop below 10px
+  U = Math.max(.72, Math.min(1.2, cam.s * .9)); nameFont = Math.max(12, 11 / U);
 }
 function zoomAt(mx, my, f) { // zoom about a screen point, out as far as the whole galaxy; the Fit button hands the camera back to the automatic view
   const ns = Math.max(fitView().min, Math.min(3.2, cam.s * f));
@@ -638,16 +702,17 @@ function layout() { // each world's name, BUYS tag and order stacks sit below it
     p.P = pr * SCALE[p.level - 1]; p.px = sx(p.x); p.py = sy(p.y); p.pw = tw + 15 + p.wants.reduce((n, g) => n + 4 + 10 * unitsOf(p, g), 0); p.dw2 = p.depot ? dw + 14 + (kinds ? kinds * 21 : 27) : 0;
     p.bw = Math.max(ctx.measureText(p.name).width, p.pw + (p.depot ? p.dw2 + 5 : 0)) + 6; p.bh = 33 + (rows ? 4 + rows * 9.5 : 0); }
   for (const p of G.planets) {
-    const x = p.px, y = p.py, spots = { below: [0, p.P + 5], right: [p.P + 12 + p.bw / 2, -17], left: [-(p.P + 12 + p.bw / 2), -17],
+    const x = p.px, y = p.py, spots = { below: [0, p.P + 5], above: [0, -p.P - 20 - p.bh], right: [p.P + 12 + p.bw / 2, -17], left: [-(p.P + 12 + p.bw / 2), -17],
       lowRight: [p.P * .7 + 8 + p.bw / 2, p.P * .7], lowLeft: [-(p.P * .7 + 8 + p.bw / 2), p.P * .7] };
     const hits = (k, pad) => { const L = x + (spots[k][0] - p.bw / 2 - pad) * U, T = y + (spots[k][1] - pad) * U, R = L + (p.bw + 2 * pad) * U, B = T + (p.bh + 2 * pad) * U; let n = 0;
       const circ = (cx, cy, rad) => Math.hypot(cx - Math.max(L, Math.min(R, cx)), cy - Math.max(T, Math.min(B, cy))) < rad;
+      if (L < 4 || R > viewRight - 4 || T < viewTop || B > viewBot) n += 8;
       if (circ(cam.cx, cam.cy, CORE * .5 * cam.s)) n += 2;
       for (const q of G.planets) if (q !== p) { if (circ(q.px, q.py, (q.P + 14) * U)) n += 2; if (q.rect && L < q.rect[2] && R > q.rect[0] && T < q.rect[3] && B > q.rect[1]) n++; }
       return n; };
     let side = p.side || 'below';
     if (side !== 'below' && !hits('below', 10)) side = 'below';
-    else if (hits(side, 0)) { let bs = hits(side, 0); for (const k of x >= cam.cx ? ['below', 'right', 'lowRight', 'left', 'lowLeft'] : ['below', 'left', 'lowLeft', 'right', 'lowRight']) { const h = hits(k, 0); if (h < bs) { bs = h; side = k; } } }
+    else if (hits(side, 0)) { let bs = hits(side, 0); for (const k of x >= cam.cx ? ['below', 'right', 'lowRight', 'left', 'lowLeft', 'above'] : ['below', 'left', 'lowLeft', 'right', 'lowRight', 'above']) { const h = hits(k, 0); if (h < bs) { bs = h; side = k; } } }
     p.side = side; const [tx, ty] = spots[side];
     if (p.bx == null) { p.bx = tx; p.by = ty; } else { p.bx += (tx - p.bx) * .18; p.by += (ty - p.by) * .18; }
     p.rect = [x + (p.bx - p.bw / 2) * U, y + p.by * U, x + (p.bx + p.bw / 2) * U, y + (p.by + p.bh) * U];
@@ -801,11 +866,6 @@ let sig = '', infoSig = '';
 const perMin = r => (r * tempoNow() * 60).toFixed(1);
 const GSVG = ['<path d="M6 1 L11 10 H1 Z"/>', '<circle cx="6" cy="6" r="4.6"/>', '<rect x="1.6" y="1.6" width="8.8" height="8.8"/>', '<path d="M6 .5 L11 6 L6 11.5 L1 6 Z"/>', '<path d="M11 6 L8.5 10.3 H3.5 L1 6 L3.5 1.7 H8.5 Z"/>']
   .map((d, g) => `<svg width="12" height="12" viewBox="0 0 12 12" fill="var(--g${g})" aria-hidden="true">${d}</svg>`);
-function flows(r) { // what this route actually carries, for the route panel
-  return [...new Set(r.stops)].map(a => { const to = r.stops.filter((b, i) => b !== a && b.wants.includes(a.good) && r.stops.indexOf(b) === i).map(b => b.name);
-    const d = r.stops.find(d => d.depot && d !== a && onward(d, a.good, r)); if (d) to.push('on via ' + d.name + ' depot');
-    return to.length ? `<span class="flow">${GSVG[a.good]}${a.name} → ${to.join(', ')}</span>` : ''; }).join('');
-}
 function syncHud() {
   $('s-cr').textContent = '◈' + G.credits; $('s-del').textContent = G.delivered; $('s-time').textContent = fmtT(G.t);
   $('pool').innerHTML = `<b>${G.reserve}</b> freighter${G.reserve === 1 ? '' : 's'} in reserve · <b>${G.licences}</b> route licence${G.licences === 1 ? '' : 's'} free`;
@@ -814,32 +874,164 @@ function syncHud() {
   const hint = $('hint'); hint.hidden = !started || !!G.over || !(placing || !G.routes.length);
   hint.textContent = placing ? 'Click or tap a world to build the depot there. Esc cancels.' : 'Drag from a world to one that buys its goods';
   $('buy-depot').setAttribute('aria-pressed', placing); $('z-fit').disabled = !cam.manual;
-  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(out(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(hp.rate[g]) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'}${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
+  const hp = hover, it = !hp && hoverD ? `<b>${hoverD.name}</b> · dormant world${hoverD === G.next ? ' · next to join, selling ' + gn(hoverD.good) : ''}` : hp ? `<b>${hp.name}</b> · makes up to ${perMin(supplyRate(hp))} ${gn(hp.good)} a minute · ${hp.wants.length ? 'wants ' + hp.wants.map(g => perMin(demandRate(hp, g)) + ' ' + gn(g)).join(', ') + ' a minute' : 'buys nothing yet'}${hp.depot ? ` · depot holds ${hp.items.length} of ${DEPOT_CAP}` : ''}${G.sel && G.sel.stops.length > 2 && G.sel.stops.includes(hp) ? ` · right-click to take it off route ${G.sel.n}` : ''}` : '';
   if (it !== infoSig) { infoSig = it; $('info').innerHTML = it; }
   const s = G.routes.map(r => r.id + ':' + r.stops.length + ':' + shipsOn(r).length + ':' + trades(r) + ':' + r.stops.map(p => p.id + '.' + p.wants.join('') + (p.depot ? 'd' : '')).join(',')).join('|') + '/' + (G.sel ? G.sel.id : '') + '/' + G.reserve;
   if (s === sig) return syncLive(); sig = s;
-  let h = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
+  const chips = G.routes.map(r => { const n = shipsOn(r).length, ok = trades(r);
     return `<button class="chip${r === G.sel ? ' sel' : ''}${n && ok ? '' : ' idle'}" data-r="${r.id}" title="Select route ${r.n}"><i>${r.n}</i>${!ok ? 'no buyer' : n ? n + (n > 1 ? ' ships' : ' ship') : 'no ship'}</button>`; }).join('');
+  let h = chips ? '<div class="route-list">' + chips + '</div>' : '';
   if (G.sel) { const r = G.sel, n = shipsOn(r).length;
-    h += `<div class="panel"><b>Route ${r.n}</b>${flows(r) ? '' : `<span class="note">No stop buys what another sells</span>`}
-      <span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
+    h += `<div class="panel"><b class="route-title">Route ${r.n}</b>
       <span class="stepper">Freighters <button data-act="minus" aria-label="Recall a freighter" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button data-act="plus" aria-label="Assign a freighter" ${G.reserve ? '' : 'disabled'}>+</button></span>
-      <button class="rm" data-act="remove">Remove route</button><div class="live" id="rlive"></div></div>`; }
-  $('routes').innerHTML = h; liveSig = ''; liveT = 0; syncLive();
+      <div class="route-path"><span class="stops">${r.stops.map(p => r.stops.length > 2 ? `<button data-stop="${p.id}" title="Take ${p.name} off this route" aria-label="Take ${p.name} off this route">${p.name} <span aria-hidden="true">×</span></button>` : p.name).join(' → ')}</span>
+        <button class="rm" data-act="remove">Remove route</button></div>
+      <div class="live" id="rlive"></div></div>`; }
+  const routes = $('routes'), scrollLeft = routes.querySelector('.route-list')?.scrollLeft || 0;
+  routes.innerHTML = h;
+  const list = routes.querySelector('.route-list');
+  if (list && scrollLeft) list.scrollLeft = scrollLeft;
+  liveSig = ''; liveT = 0; syncLive();
 }
-const GS10 = GSVG.map(v => v.replace('width="12" height="12"', 'width="10" height="10"'));
+// Observations use game time, so selecting a route, pausing or changing speed cannot age its statistics.
+function sampleFleet(r) {
+  const cutoff = G.t - 60;
+  for (const events of [r.sold, r.handoffs]) {
+    while (events.length && events[0][0] <= cutoff) events.shift();
+  }
+  const ships = shipsOn(r);
+  if (!ships.length) return;
+  // A waiting job needs actual freight and an unreserved order. Depot buffer top-ups
+  // alone are never evidence that a freighter is missing.
+  let ready = 0;
+  for (const p of r.stops) {
+    const destinations = new Map();
+    for (const [g, dest, relay] of jobs(r, p)) {
+      if (!destinations.has(g)) destinations.set(g, new Map());
+      const qty = relay ? Math.max(0, onwardOpen(dest, g, r) - buffered(dest, g)) : open(dest, g);
+      destinations.get(g).set(dest, qty);
+    }
+    for (const [g, demand] of destinations) {
+      const stock = (p.good === g ? p.stock : 0) + p.items.filter(item => item === g).length;
+      ready += Math.min(stock, [...demand.values()].reduce((sum, qty) => sum + qty, 0));
+    }
+    if (ready >= 2) break;
+  }
+  const idle = s => s.state === 'dock' && !s.cargo.length;
+  r.fleetSamples.push({ t: G.t, waiting: ready >= 2, busy: !ships.some(idle),
+    recallIdle: idle(ships[ships.length - 1]), arrived: r.lastArrival > G.t - 1 });
+  while (r.fleetSamples.length && r.fleetSamples[0].t <= cutoff) r.fleetSamples.shift();
+}
+
+// Freight can change lines only at a depot. An origin can load any staffed line
+// through it. When inspecting an unstaffed line, show its potential trading partners.
+function freightReach(origin, routes, allowBoarding) {
+  const worlds = new Set([origin]), visited = new Set();
+  const next = allowBoarding || origin.depot ? [origin] : [];
+  for (const stop of next) for (const r of routes) {
+    if (visited.has(r) || !r.stops.includes(stop)) continue;
+    visited.add(r);
+    for (const p of r.stops) {
+      if (!worlds.has(p) && p.depot) next.push(p);
+      worlds.add(p);
+    }
+  }
+  return worlds;
+}
+
+// Estimate the sustainable rate available at each buyer. Share each seller's
+// capacity among its reachable buyers, giving first claim to the least-covered
+// demand. Rebalancing accounts for buyers with alternative suppliers.
+function shareSupply(pools, needs) {
+  const allocated = new Map([...needs.keys()].map(p => [p, 0]));
+  for (let pass = 0; pass < 12; pass++) {
+    let change = 0;
+    for (const pool of pools) {
+      for (const [p, previous] of pool.share) allocated.set(p, allocated.get(p) - previous);
+      const coverage = p => allocated.get(p) / needs.get(p);
+      const order = pool.buyers.slice().sort((a, b) => coverage(a) - coverage(b));
+      let rate = pool.capacity, weight = 0, level = 0;
+      for (const p of order) {
+        if (weight && rate / weight < coverage(p)) break;
+        rate += allocated.get(p); weight += needs.get(p); level = rate / weight;
+      }
+      for (const p of order) {
+        const share = Math.max(0, level * needs.get(p) - allocated.get(p));
+        change = Math.max(change, Math.abs(share - (pool.share.get(p) || 0)));
+        pool.share.set(p, share); allocated.set(p, allocated.get(p) + share);
+      }
+    }
+    if (change < .0001) break;
+  }
+  return allocated;
+}
+
+function routeBalance(r) {
+  const staffed = new Set(G.ships.map(s => s.route));
+  const other = G.routes.filter(q => q !== r && staffed.has(q));
+  const network = other.concat(r);
+  const sides = r.stops.map(p => freightReach(p, other, false));
+  const origins = G.planets.map(p => ({ p, reach: freightReach(p, network, true) }));
+  const rows = [];
+  for (let g = 0; g < G.active; g++) {
+    const needs = new Map(G.planets.filter(p => p.wants.includes(g)).map(p => [p, demandRate(p, g)]));
+    const pools = [], served = new Set();
+    for (const { p: seller, reach } of origins) {
+      if (seller.good !== g) continue;
+      const buyers = [...needs.keys()].filter(b => b !== seller && reach.has(b));
+      if (!buyers.length) continue;
+      pools.push({ buyers, capacity: supplyRate(seller), share: new Map() });
+      for (const b of buyers) {
+        if (sides.some((side, i) => side.has(seller) && (seller === r.stops[i] || !side.has(b)) &&
+          sides.some((far, j) => j !== i && far.has(b) && (b === r.stops[j] || !far.has(seller))))) served.add(b);
+      }
+    }
+    if (!served.size) continue;
+    const allocated = shareSupply(pools, needs);
+    const row = { g, supply: 0, demand: 0, short: [], delivered: 0, relayed: 0 };
+    for (const b of served) {
+      row.supply += allocated.get(b); row.demand += needs.get(b);
+      if (allocated.get(b) + .0005 < needs.get(b)) row.short.push(b.name);
+    }
+    row.delivered = r.sold.filter(([t, good]) => good === g && t > G.t - 60).length;
+    row.relayed = r.handoffs.filter(([t, good]) => good === g && t > G.t - 60).length;
+    rows.push(row);
+  }
+  return rows;
+}
+
+function fleetVerdict(r, rows) {
+  if (!rows.length) return 'No trade';
+  const count = shipsOn(r).length;
+  if (!count) return 'Needs a ship';
+  const samples = r.fleetSamples;
+  if (!samples.length || G.t - samples[0].t < 40) return 'Measuring';
+  const recent = samples.filter(s => s.t > G.t - 15);
+  const busyQueue = s => s.waiting && s.busy;
+  const fraction = (list, test) => list.filter(test).length / Math.max(1, list.length);
+  if (fraction(samples, busyQueue) >= .6 && fraction(recent, busyQueue) >= .6) return 'Likely needs +1';
+  if (count > 1 && fraction(samples, s => s.recallIdle) >= .8 && fraction(recent, s => s.recallIdle) >= .8 &&
+      fraction(samples, s => s.waiting) < .15 && samples.some(s => s.arrived)) return 'Likely 1 spare';
+  if (rows.some(row => row.short.length) && fraction(recent, s => !s.busy && !s.waiting) >= .5) return 'Supply limited';
+  if (samples.filter(s => s.arrived).length < 2) return samples.some(s => s.busy) ? 'Measuring' : 'Light traffic';
+  return 'Keeping up';
+}
+
 let liveSig = '', liveT = 0;
-function routeLive(r) { // the selected route as it is running: what each good on it is wanted and delivered at, sellers asked for too much, and every freighter with its load
-  const age = G.t - r.born, mins = v => v.toFixed(1); let h = '';
-  const brings = (q, g, b) => q.stops.includes(b) && (q.stops.some(z => z.good === g) || q.stops.some(d => d.depot && d !== b && G.routes.some(r2 => r2 !== q && r2.stops.includes(d) && r2.stops.some(z => z.good === g))));
-  for (let g = 0; g < G.active; g++) { const buyers = r.stops.filter(b => b.wants.includes(g) && brings(r, g, b)); if (!buyers.length) continue;
-    const sellers = r.stops.filter(p => p.good === g), from = sellers.length ? sellers.map(p => p.name).join(', ') : 'depot';
-    const want = buyers.reduce((n, b) => n + b.rate[g] / G.routes.filter(q => brings(q, g, b)).length, 0) * tempoNow() * 60; // a buyer served by several routes is split between them
-    const got = age < 20 ? null : r.sold.filter(e => e[1] === g).length * 60 / Math.min(60, age), short = got != null && age > 45 && got < want * .7;
-    h += `<span class="row${short ? ' short' : ''}"><span class="flow">${GSVG[g]}${from} → ${buyers.map(b => b.name).join(', ')}</span><span class="nums">wants ${mins(want)} · gets ${got == null ? '–' : mins(got)} a min</span></span>`; }
-  for (const p of r.stops) { const f = faced(p); if (f > out(p) * 1.05) h += `<span class="note">${p.name} makes ${perMin(out(p))} ${gn(p.good)} a minute but its routes ask for ${perMin(f)}</span>`; }
-  const ships = shipsOn(r); if (ships.length) h += `<span class="ships">${ships.map(s => `<span class="ship">${s.cargo.length ? s.cargo.map(c => c.g).sort().map(g => GS10[g]).join('') : '<small>empty</small>'}<small>${s.state === 'dock' ? 'at ' + s.at.name : '→ ' + r.stops[s.idx].name}</small></span>`).join('')}</span>`;
-  return h;
+function routeLive(r) {
+  const rows = routeBalance(r);
+  const limited = rows.filter(row => row.short.length);
+  const balance = limited.length ? limited.map(row => GOODS[row.g]).join(', ') + ' short' : 'Supply matched';
+  const fleet = fleetVerdict(r, rows);
+  const headline = rows.length ? balance : 'No matching trade';
+  const summary = `<div class="route-summary"><b class="${limited.length ? 'short' : ''}">${headline}</b><span>Fleet · ${fleet}</span></div>`;
+  if (!rows.length) return summary;
+  const body = rows.map(row => {
+    const moved = row.delivered + row.relayed;
+    const shortage = row.short.length ? 'Short at ' + row.short.join(', ') : 'Supply covers demand';
+    return `<tr><th scope="row">${GSVG[row.g]}${GOODS[row.g]}</th><td title="${shortage}" class="${row.short.length ? 'short' : ''}">${perMin(row.supply)}</td><td>${perMin(row.demand)}</td><td title="${row.delivered} delivered · ${row.relayed} handed to a depot">${moved}</td></tr>`;
+  }).join('');
+  return summary + `<table class="route-rates" aria-label="Route supply and demand per game minute, and units moved in the past minute"><thead><tr><th scope="col">Good</th><th scope="col" title="Estimated sustainable units per game minute at these buyers, including shared supply">Supply/min</th><th scope="col" title="Current buyer demand per game minute">Need/min</th><th scope="col" title="Units delivered or handed to a depot by this route in the last 60 game seconds">Moved/60s</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 function syncLive() { const el = $('rlive'); if (!el || !G.sel) return; const now = performance.now(); if (now - liveT < 250) return; liveT = now; // a few times a second is plenty, and it leaves the panel's buttons alone
   const h = routeLive(G.sel); if (h !== liveSig) { liveSig = h; el.innerHTML = h; }
@@ -1110,8 +1302,9 @@ $('lb-form').addEventListener('submit', e => {
 });
 readColors();
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
+new ResizeObserver(() => { cam.fast = 45; }).observe($('dock'));
 newGame(today()); resize(); aimCamera(true); requestAnimationFrame(frame); // today's galaxy turns behind the title card
 lbLoad(); // after the first galaxy is dealt: the boards are drawn against it
-window.__ol = { get G() { return G; }, faced, reach, routeLive, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
+window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };
 })();
 </script>

@@ -45,7 +45,7 @@ There is a board for each day's galaxy and one for all time. A run of today's ga
 - **The network keeps two units spare.** A world joins at level 1 and arrives buying one unit of something the network has spare. Midway between arrivals an existing world grows a level: it makes one more unit and wants one more. Nothing a world already buys is ever taken away.
 - **Sometimes demand runs ahead.** A growing world may want the good the next newcomer will sell before that world has joined, leaving that good one unit short until it arrives. The message says so, and the map shows what the next world sells.
 - **Production is just in time.** A world only releases a unit when an order it can reach by its own routes is waiting, so stock builds up only where deliveries fall behind. A world with nothing it can reach still keeps up to three units on show while orders for its good wait somewhere, so an untapped seller is visible.
-- **The route panel shows a route running.** For each good it carries: what its buyers want and what it delivered over the last minute, any seller asked for more than it makes, and every freighter with its load and heading.
+- **Select a route to check its balance.** Each good shows estimated sustainable supply at its buyers, their current demand, and units this line moved during the last 60 game seconds (deliveries and depot handoffs). Shared suppliers, depot chains, surges and crunches feed into the estimate. The fleet reading uses recent trips, idle time and freight waiting for pickup to flag a likely spare ship or the need for another.
 - **Freighters** load one unit per open order ahead of them, never two for the same order, and wait at a world when there is nothing to carry. They accelerate to the midpoint of a lane, flip, and brake.
 - **Depots** can be built on a world so one route can leave goods there for another route to carry on. A depot keeps a couple of units ahead of demand for each good it passes on.
 - **Events** (demand surges and supply crunches) knock a balanced network off for a while.
@@ -72,7 +72,7 @@ node build.js
 
 ## Tests
 
-The scripts in `tests/` need [Playwright](https://playwright.dev) (`npm i playwright`) and are run one at a time with `node`:
+The route analytics checks run with `node --test tests/route-analytics.js`. The browser scripts below use [Playwright](https://playwright.dev) (`npm i playwright`) and run one at a time with `node`.
 
 | Script | What it checks |
 | --- | --- |

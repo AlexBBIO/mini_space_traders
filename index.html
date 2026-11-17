@@ -130,8 +130,13 @@ button.toast:hover { border-color: var(--ink); }
 .lb form button:disabled { opacity: .45; cursor: default; }
 #lb-msg { font-size: 13px; color: var(--muted); min-height: 1.2em; }
 .result { display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
-.dock { box-sizing: border-box; pointer-events: auto; overflow-y: auto; overscroll-behavior: contain; max-height: 47%; padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right)); }
-.dock > * { flex: none; min-width: 0; }
+/* Both route-panel states use the same map bounds. Empty space above the controls still passes touches to the chart. */
+.dock-area { position: absolute; inset: auto 0 0; height: min(42%, 254px); pointer-events: none; }
+.dock { box-sizing: border-box; pointer-events: auto; max-height: 100%; padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right)); }
+.dock-content { display: flex; flex-direction: column; align-items: stretch; gap: inherit; width: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.dock-content > * { flex: none; min-width: 0; }
+/* A world readout floats above the bottom dock so wrapping text cannot reframe the chart. */
+.dock #info { position: absolute; bottom: 100%; inset-inline: 0; width: fit-content; max-width: calc(100% - 2 * var(--gutter)); box-sizing: border-box; margin-inline: auto; padding: 3px 8px; border-radius: 6px; background: var(--panel); font-size: 12px; pointer-events: none; }
 .dock .shop { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; width: 100%; gap: 4px; }
 .shop .pool { grid-column: 1 / -1; text-align: center; font-size: 12px; padding: 0; }
 .shop .buy { display: grid; grid-template-rows: 1fr auto; align-items: center; justify-items: center; gap: 2px; min-width: 0; padding: 4px 2px; line-height: 1.15; font-size: 12px; }
@@ -146,12 +151,14 @@ button.toast:hover { border-color: var(--ink); }
   .route-list { flex-wrap: wrap; }
 }
 @media (min-width: 900px), (min-width: 560px) and (max-height: 500px) {
-  .dock { top: 62px; bottom: 0; left: auto; right: 0; width: var(--rail); max-height: none; align-items: stretch; justify-content: flex-start; gap: 12px; padding-block: 4px 14px; }
+  .dock-area { inset: 62px 0 0 auto; width: var(--rail); height: auto; }
+  .dock { inset: 0; width: auto; align-items: stretch; justify-content: flex-start; gap: 12px; padding-block: 4px 14px; overflow-y: auto; overscroll-behavior: contain; }
+  .dock-content { display: contents; }
   .dock .row { justify-content: flex-start; }
   .dock .shop { grid-template-columns: 1fr; gap: 6px; }
   .shop .buy { display: flex; justify-content: space-between; padding: 7px 10px; font-size: 14px; }
   .shop .pool, #info { text-align: left; }
-  #info { order: 3; }
+  .dock #info { position: static; order: 3; flex: none; width: auto; max-width: none; margin: 0; padding: 0; background: none; font-size: inherit; }
   .route-list { flex-wrap: wrap; }
   #toasts { right: calc(var(--rail) + 10px); }
   #hint { left: calc((100% - var(--rail)) / 2); max-width: calc(100% - var(--rail) - 64px); }
@@ -218,16 +225,20 @@ button.toast:hover { border-color: var(--ink); }
   <div id="hint" hidden>Drag from a world to one that buys its goods</div>
   <div id="toasts" aria-live="polite"></div>
 
-  <div class="dock" id="dock">
-    <div id="info" aria-live="off"></div>
-    <div class="row" id="routes"></div>
-    <div class="row shop">
-      <span class="pool" id="pool"></span>
-      <button class="buy" id="buy-ship" title="Adds a freighter to your reserve">Freighter <b></b></button>
-      <button class="buy" id="buy-lic" title="Lets you open one more route">Route licence <b></b></button>
-      <button class="buy" id="buy-depot" aria-pressed="false" title="Build a depot at a world. A route can leave goods there for another route to carry on. Depots can chain">Depot <b></b></button>
-      <button class="buy" id="buy-hold" title="Every freighter carries 2 more">Bigger holds <b></b></button>
-      <button class="buy" id="buy-eng" title="Every freighter burns harder, cutting trip times by about 15%">Faster engines <b></b></button>
+  <div class="dock-area" id="dock-area">
+    <div class="dock" id="dock">
+      <div id="info" aria-live="off"></div>
+      <div class="dock-content">
+        <div class="row" id="routes"></div>
+        <div class="row shop">
+          <span class="pool" id="pool"></span>
+          <button class="buy" id="buy-ship" title="Adds a freighter to your reserve">Freighter <b></b></button>
+          <button class="buy" id="buy-lic" title="Lets you open one more route">Route licence <b></b></button>
+          <button class="buy" id="buy-depot" aria-pressed="false" title="Build a depot at a world. A route can leave goods there for another route to carry on. Depots can chain">Depot <b></b></button>
+          <button class="buy" id="buy-hold" title="Every freighter carries 2 more">Bigger holds <b></b></button>
+          <button class="buy" id="buy-eng" title="Every freighter burns harder, cutting trip times by about 15%">Faster engines <b></b></button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -456,15 +467,16 @@ function step(dt) {
   for (const p of G.planets) { p.ang += p.w * dt; place(p); }
   for (const p of G.dormant) { p.ang += p.w * dt; place(p); }
   for (const d of G.dust) d.ang += d.w * dt;
-  for (const d of G.planets) if (d.depot) { d.purgeT -= dt; // goods no route can sell any more slowly spoil
-    if (d.purgeT <= 0) { d.purgeT = 4; const i = d.items.findIndex(g => !onward(d, g, null)); if (i >= 0) d.items.splice(i, 1); } }
   while (G.sec < Math.floor(G.t)) plan(++G.sec);
+  for (const d of G.planets) if (d.depot) { d.purgeT -= dt; // keep stock that this world or an onward route can use
+    if (d.purgeT <= 0) { d.purgeT = 4; const i = d.items.findIndex(g => !d.wants.includes(g) && !onward(d, g, null)); if (i >= 0) d.items.splice(i, 1); } }
   const tempo = tempoNow(), gap = [0, 0, 0, 0, 0]; // tempo: units per second for a mid-size world, rising all run. gap: per good, orders that have no unit made for them yet
   for (const p of G.planets) { p.rc = reach(p); gap[p.good] -= Math.min(p.stock, p.rc); for (const g of p.items) gap[g]--; for (const g of p.wants) gap[g] += ordersOf(p, g); } // stock no route can deliver does not count against the orders
   for (const o of G.ships) for (const c of o.cargo) gap[c.g]--;
   for (const p of G.planets) for (const g of p.wants) { // demand leads: each good a world buys ticks up at its fixed rate, faster during a surge
     p.accD[g] += demandRate(p, g) * tempo * dt;
     if (p.accD[g] >= 1) { if (totalOrders(p) < ORD_CAP) { p.orders[g] = ordersOf(p, g) + 1; gap[g]++; p.accD[g] -= rnd(.8, 1.2, RS); } else p.accD[g] = 1; } }
+  for (const p of G.planets) if (p.depot && p.items.length) collectFromDepot(p);
   for (let n = G.planets.length, k0 = Math.floor(RS() * n), k = 0; k < n; k++) { // supply follows, just in time: a world readies units at its fixed rate
     const p = G.planets[(k0 + k) % n], g = p.good;
     p.accS = Math.min(1, p.accS + supplyRate(p) * tempo * dt * (gap[g] >= 2 ? 1.6 : 1)); // temporary catch-up production is above the sustainable rate
@@ -473,7 +485,7 @@ function step(dt) {
       else if (p.stock < READY) { p.stock++; p.accS -= rnd(.8, 1.2, RS); } } } // nothing it can reach is waiting, but somewhere orders for its good are: it keeps a couple of units on show, ready for a route
   G.diagT += dt; if (G.diagT >= 1) { diagTick(gap, G.diagT); G.diagT = 0; }
   for (const p of G.planets) {
-    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`Orders are piling up at ${p.name}.`, true, p); sfx('warn'); } }
+    if (totalOrders(p) >= CRIT) { p.over += dt / 60; if (!G.warned.has(p.id)) { G.warned.add(p.id); toast(`${p.name} pays ◈${DISTRESS_PREMIUM} extra per delivery at ${CRIT} or more orders.`, true, p); sfx('warn'); } }
     else { p.over = Math.max(0, p.over - dt / 15); if (p.over === 0) G.warned.delete(p.id); }
     if (p.over >= 1 && !G.over) { G.over = p; endGame(); }
   }
@@ -488,11 +500,13 @@ function bend(a, b, side) { // control point of the lane between two worlds, bow
   return { cx: (a.x + b.x) / 2 + nx * sgn * h, cy: (a.y + b.y) / 2 + ny * sgn * h, sgn };
 }
 const laneLen = (a, b, c) => (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.cx - a.x, c.cy - a.y) + Math.hypot(b.x - c.cx, b.y - c.cy)) / 2;
+const HANDLING_TIME = .13, ARRIVAL_DELAY = .25;
+function flightSeconds(len) { return 2 * Math.sqrt((len - 2 * Math.min(.45 * len, DOCK_R)) / G.accel); }
 function stepShip(s, dt) {
   if (s.state === 'dock') { if (s.trail.length) s.trail.shift(); s.x = s.at.x + s.ox; s.y = s.at.y + s.oy; s.dockT -= dt; if (s.dockT <= 0) dockAction(s); return; }
   const a = s.from || s.route.stops[s.prev], b = s.route.stops[s.idx], c = bend(a, b, s.side), len = laneLen(a, b, c) || 1;
-  const e = Math.min(.45, DOCK_R / len), run = len * (1 - 2 * e); // it flies from just off one world to just off the next
-  s.tau = Math.min(1, s.tau + dt / (2 * Math.sqrt(run / G.accel))); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
+  const e = Math.min(.45, DOCK_R / len); // it flies from just off one world to just off the next
+  s.tau = Math.min(1, s.tau + dt / flightSeconds(len)); // a constant burn: speed up to the midpoint, then brake, so trip time grows with the square root of distance
   const kk = s.tau < .5 ? 2 * s.tau * s.tau : 1 - 2 * (1 - s.tau) ** 2, t = e + (1 - 2 * e) * kk, u = 1 - t;
   s.x = u * u * a.x + 2 * u * t * c.cx + t * t * b.x; s.y = u * u * a.y + 2 * u * t * c.cy + t * t * b.y;
   s.trT += dt; if (s.trT >= .09) { s.trT = 0; s.trail.push([s.x, s.y]); if (s.trail.length > 16) s.trail.shift(); } // where it has just been, for the wake drawn behind it
@@ -500,7 +514,7 @@ function stepShip(s, dt) {
   // attitude: nose along the lane while speeding up, then it flips and flies tail-first to brake. The drive only lights once the ship is lined up
   const want = Math.atan2(s.hy, s.hx) + (s.tau >= .5 ? Math.PI : 0), da = ((((want - s.face + Math.PI) % 6.2832) + 6.2832) % 6.2832) - Math.PI, turn = 2.6 * dt;
   s.face += Math.abs(da) <= turn ? da : Math.sign(da) * turn; s.burn = Math.abs(da) < .3 && s.tau < .985 ? 1 : 0;
-  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = .25; s.burn = 0; s.from = null; s.route.lastArrival = G.t; }
+  if (s.tau >= 1) { s.ox = s.x - b.x; s.oy = s.y - b.y; s.at = b; s.state = 'dock'; s.dockT = ARRIVAL_DELAY; s.burn = 0; s.from = null; s.route.lastArrival = G.t; }
 }
 /* How a freighter decides what to do at a stop. Every unit it loads is tied to one specific open order (or to a depot that
    will pass it on), so two freighters never load for the same order, and it only loads for stops ahead of it. */
@@ -518,15 +532,179 @@ function jobs(r, q) { // what a freighter on route r could usefully load at worl
   if (q.depot) for (const g of new Set(q.items)) for (const z of others) { if (open(z, g) > 0) out.push([g, z, false, true]); else if (relay(z, g)) out.push([g, z, true, true]); }
   return out;
 }
-function pull(s, r, i, d) { // is there a reason to head this way: cargo to deliver, goods here for an order that way, or goods waiting that way?
-  const way = side(r, i, d); if (!way.length) return false;
-  if (s.cargo.some(c => way.includes(c.to))) return true;
-  if (s.cargo.length >= G.cap) return false;
-  if (jobs(r, r.stops[i]).some(j => way.includes(j[1]))) return true;
-  return way.some(q => { // goods waiting at a stop that way, beyond what freighters already there or heading there can take
-    const units = jobs(r, q).reduce((n, j) => n + (j[2] ? 1 : open(j[1], j[0])), 0); if (!units) return false;
-    let room = 0; for (const o of G.ships) if (o !== s && o.route === r && (o.at === q || (o.state === 'fly' && r.stops[o.idx] === q))) room += G.cap - o.cargo.length;
-    return units > room; });
+function waitingUnits(r, p) {
+  const destinations = new Map();
+  for (const [g, dest, relay] of jobs(r, p)) {
+    if (!destinations.has(g)) destinations.set(g, new Map());
+    const qty = relay ? Math.max(0, onwardOpen(dest, g, r) - buffered(dest, g)) : open(dest, g);
+    destinations.get(g).set(dest, qty);
+  }
+  let ready = 0;
+  for (const [g, demand] of destinations) {
+    const stock = (p.good === g ? p.stock : 0) + p.items.filter(item => item === g).length;
+    ready += Math.min(stock, [...demand.values()].reduce((sum, qty) => sum + qty, 0));
+  }
+  return ready;
+}
+// Prices follow the buyer's queue. Each delivery makes the next unit cheaper.
+const DISTRESS_PREMIUM = 2;
+const RELAY_VALUE = 2; // planning estimate for helping an onward sale; a handoff earns no credits itself
+function salePrice(p, g, orders, worldOrders = totalOrders(p)) {
+  return (4 + orders) * (G.rush && G.rush.p === p && G.rush.g === g ? 2 : 1) + (worldOrders >= CRIT ? DISTRESS_PREMIUM : 0);
+}
+function settleOrder(p, g) {
+  const n = ordersOf(p, g), pay = salePrice(p, g, n);
+  p.orders[g] = n - 1; G.credits += pay; G.earned += pay; G.delivered++; sfx('deliver', g);
+  const f = G.floats.find(f => f.p === p && f.amt && f.t < .4);
+  if (f) { f.amt += pay; f.text = '+' + f.amt; f.t = 0; }
+  else G.floats.push({ p, amt: pay, text: '+' + pay, t: 0 });
+}
+function collectFromDepot(p) {
+  for (let k = p.items.length - 1; k >= 0; k--) {
+    const g = p.items[k];
+    if (!ordersOf(p, g)) continue;
+    if (open(p, g) === 0) {
+      // The local unit fills a booked order immediately. Its inbound unit
+      // replaces it in the freed depot slot instead of selling a second time.
+      for (const ship of G.ships) {
+        const inbound = ship.cargo.find(c => !c.relay && c.to === p && c.g === g);
+        if (inbound) { release(inbound); inbound.relay = true; break; }
+      }
+    }
+    p.items.splice(k, 1);
+    settleOrder(p, g);
+  }
+}
+
+function freightSnapshot(ship) {
+  const r = ship.route, stops = r.stops, stock = [], demand = [], depotRoom = [], offers = [];
+  for (const [i, p] of stops.entries()) {
+    depotRoom[i] = DEPOT_CAP - p.items.length;
+    for (const [g, dest, relay, fromDepot] of jobs(r, p)) {
+      const j = stops.indexOf(dest), source = i * GOODS.length + g, order = j * GOODS.length + g;
+      if (fromDepot && p.good === g && p.stock) continue; // ship locally produced stock first
+      stock[source] = (p.good === g ? p.stock : 0) + p.items.filter(item => item === g).length;
+      demand[order] = relay ? Math.max(0, onwardOpen(dest, g, r) + AHEAD - buffered(dest, g)) : open(dest, g);
+      offers.push({ from: i, to: j, g, relay, source, order });
+    }
+  }
+  for (const s of G.ships) for (const c of s.cargo) {
+    if (c.relay && stops.includes(c.to)) depotRoom[stops.indexOf(c.to)]--;
+  }
+  // Forecast what other ships already at or approaching a pickup can claim.
+  // Only cargo actually loaded is reserved in the real order book.
+  const peerDemand = demand.slice(), peerDepotRoom = depotRoom.slice();
+  for (const peer of G.ships) {
+    if (peer === ship || peer.route !== r || peer.idx === ship.idx) continue;
+    const aboard = peer.cargo.filter(c => c.to !== stops[peer.idx]);
+    const committed = aboard.find(c => c.to && stops.includes(c.to));
+    const dir = committed && Math.sign(stops.indexOf(committed.to) - peer.idx);
+    const pickups = offers.filter(o => o.from === peer.idx && (!dir || Math.sign(o.to - o.from) === dir));
+    pickups.sort((a, b) => a.relay - b.relay || Math.abs(a.to - a.from) - Math.abs(b.to - b.from));
+    let room = G.cap - aboard.length;
+    for (const o of pickups) {
+      const n = Math.min(room, stock[o.source], peerDemand[o.order], o.relay ? Math.max(0, peerDepotRoom[o.to]) : Infinity);
+      room -= n; stock[o.source] -= n; peerDemand[o.order] -= n;
+      if (o.relay) peerDepotRoom[o.to] -= n;
+    }
+  }
+  const travel = stops.slice(1).map((p, i) => {
+    const len = laneLen(stops[i], p, bend(stops[i], p));
+    return flightSeconds(len) + ARRIVAL_DELAY; // first dock action after arrival
+  });
+  return { stock, demand, depotRoom, offers, travel };
+}
+
+// Pack both legs of a possible trip. A unit occupies one slot on each hop
+// between its pickup and its delivery, freeing that slot at the buyer.
+function scoreTrip(ship, market, path, turn) {
+  const stops = ship.route.stops, stock = market.stock.slice(), demand = market.demand.slice();
+  const depotRoom = market.depotRoom.slice(), room = Array(path.length - 1).fill(G.cap);
+  const value = Array(path.length).fill(0), handling = Array(path.length).fill(0);
+  const queue = stops.map(totalOrders), booked = new Map();
+  let firstLoad = null;
+  for (const c of ship.cargo) {
+    const at = path.findIndex((p, k) => k > 0 && stops[p] === c.to);
+    const end = at < 0 ? room.length : at;
+    for (let k = 0; k < end; k++) room[k]--;
+    if (at > 0) {
+      const buyer = path[at], key = buyer * GOODS.length + c.g;
+      const n = ordersOf(c.to, c.g) - (booked.get(key) || 0);
+      value[at] += c.relay ? RELAY_VALUE : salePrice(c.to, c.g, n, queue[buyer]);
+      if (!c.relay) { booked.set(key, (booked.get(key) || 0) + 1); queue[buyer]--; }
+      handling[at] += HANDLING_TIME;
+    }
+  }
+  const travelTime = [0];
+  for (let k = 1; k < path.length; k++) {
+    travelTime.push(travelTime[k - 1] + market.travel[Math.min(path[k - 1], path[k])]);
+  }
+  const options = [];
+  for (let end = 1; end < path.length; end++) {
+    for (let start = end <= turn ? 0 : turn; start < end; start++) {
+      for (const offer of market.offers) {
+        if (offer.from === path[start] && offer.to === path[end]) {
+          options.push({ offer, start, end, duration: travelTime[end] - travelTime[start] });
+        }
+      }
+    }
+  }
+  // Spend hold space on the best return per slot-second. Short loads can reuse
+  // the same slot several times. A high-paying sale can justify carrying it farther.
+  for (;;) {
+    let best = null, bestYield = 0, pay = 0;
+    for (const option of options) {
+      const { offer: o, start, end, duration } = option;
+      if (!stock[o.source] || !demand[o.order] || (o.relay && depotRoom[o.to] <= 0)) continue;
+      let space = true;
+      for (let k = start; k < end; k++) if (room[k] <= 0) { space = false; break; }
+      if (!space) continue;
+      const price = o.relay ? RELAY_VALUE : salePrice(stops[o.to], o.g, demand[o.order], queue[o.to]);
+      const yieldPerSlot = price / (duration + 2 * HANDLING_TIME);
+      if (yieldPerSlot > bestYield) { best = option; bestYield = yieldPerSlot; pay = price; }
+    }
+    if (!best) break;
+    const { offer: o, start, end } = best;
+    if (start === 0 && !firstLoad) firstLoad = o;
+    for (let k = start; k < end; k++) room[k]--;
+    stock[o.source]--; demand[o.order]--;
+    if (o.relay) depotRoom[o.to]--; else queue[o.to]--;
+    value[end] += pay;
+    handling[start] += HANDLING_TIME; handling[end] += HANDLING_TIME;
+  }
+  // Compare earnings per second through each possible delivery stop. A longer
+  // trip can win by making several sales, even if the first hop is empty.
+  let elapsed = handling[0], earned = 0, rate = 0;
+  for (let k = 1; k < path.length; k++) {
+    elapsed += market.travel[Math.min(path[k - 1], path[k])] + handling[k];
+    earned += value[k];
+    rate = Math.max(rate, earned / elapsed);
+  }
+  return { dir: Math.sign(path[1] - path[0]), load: firstLoad, rate };
+}
+
+function freightPlan(ship) {
+  const stops = ship.route.stops, i = ship.idx;
+  const committed = ship.cargo.map(c => stops.indexOf(c.to)).filter(idx => idx >= 0 && idx !== i);
+  const heading = committed.some(idx => Math.sign(idx - i) === ship.dir) ? ship.dir : committed.length ? -ship.dir : 0;
+  if (heading && ship.cargo.length >= G.cap) return { dir: heading, load: null };
+  const market = freightSnapshot(ship);
+  if (heading && !market.offers.some(o => o.from === i && Math.sign(o.to - i) === heading)) return { dir: heading, load: null };
+  if (!committed.length && !market.offers.some(o => market.stock[o.source] > 0 && market.demand[o.order] > 0)) return null;
+  let best = null;
+  for (const dir of [ship.dir, -ship.dir]) {
+    if (heading && dir !== heading) continue;
+    const outbound = [i];
+    for (let j = i + dir; j >= 0 && j < stops.length; j += dir) {
+      outbound.push(j);
+      if (committed.some(idx => (idx - j) * dir > 0)) continue;
+      const path = outbound.slice();
+      for (let k = j - dir; k >= 0 && k < stops.length; k -= dir) path.push(k);
+      const plan = scoreTrip(ship, market, path, outbound.length - 1);
+      if (plan.rate > 0 && (!best || plan.rate > best.rate || (plan.rate === best.rate && plan.load && !best.load))) best = plan;
+    }
+  }
+  return best;
 }
 function depart(s) {
   const r = s.route; s.prev = s.idx; s.idx += s.dir; s.state = 'fly'; s.at = null;
@@ -536,32 +714,38 @@ function dockAction(s) {
   const p = s.at, r = s.route, i = s.idx;
   for (let k = 0; k < s.cargo.length; k++) { // sell: fill the order this unit was loaded for, or any order here that nothing is coming for
     const c = s.cargo[k], g = c.g, n = ordersOf(p, g);
-    if (n > 0 && ((c.to === p && !c.relay) || open(p, g) > 0)) { let pay = 4 + n; if (G.rush && G.rush.p === p && G.rush.g === g) pay *= 2; // the longer the queue, the better the price
-      release(c); p.orders[g] = n - 1; s.cargo.splice(k, 1); r.sold.push([G.t, g]); while (r.sold[0][0] < G.t - 60) r.sold.shift(); G.credits += pay; G.earned += pay; G.delivered++; sfx('deliver', g);
-      const f = G.floats.find(f => f.p === p && f.amt && f.t < .4); if (f) { f.amt += pay; f.text = '+' + f.amt; f.t = 0; } else G.floats.push({ p, amt: pay, text: '+' + pay, t: 0 });
-      s.dockT = .13; return; }
+    if (n > 0 && ((c.to === p && !c.relay) || open(p, g) > 0)) {
+      release(c); s.cargo.splice(k, 1); settleOrder(p, g);
+      r.sold.push([G.t, g]); while (r.sold[0][0] < G.t - 60) r.sold.shift();
+      s.dockT = HANDLING_TIME; return; }
   }
   if (p.depot) for (let k = 0; k < s.cargo.length; k++) { // leave relay goods at this world's depot for another route
-    const c = s.cargo[k]; if (c.relay && c.to === p && p.items.length < DEPOT_CAP) { s.cargo.splice(k, 1); p.items.push(c.g); r.handoffs.push([G.t, c.g]); s.dockT = .13; return; }
+    const c = s.cargo[k]; if (c.relay && c.to === p && p.items.length < DEPOT_CAP) { s.cargo.splice(k, 1); p.items.push(c.g); r.handoffs.push([G.t, c.g]); s.dockT = HANDLING_TIME; return; }
   }
   for (let k = 0; k < s.cargo.length; k++) { // a unit whose buyer changed its mind finds another order on this route, waits for one, or is dumped
-    const c = s.cargo[k]; if (c.to && (c.relay ? onward(c.to, c.g, r) : c.to.wants.includes(c.g))) continue;
+    const c = s.cargo[k]; if (c.to && (c.to.wants.includes(c.g) || (c.relay && onward(c.to, c.g, r)))) continue;
     c.to = null; c.relay = false; const z = r.stops.find(z => z !== p && open(z, c.g) > 0), e = z ? null : r.stops.find(e => e.depot && e !== p && onward(e, c.g, r));
     if (z) { c.to = z; z.res[c.g] = resOf(z, c.g) + 1; } else if (e) { c.to = e; c.relay = true; }
     else if (!buysOn(r, c.g)) { s.cargo.splice(k, 1); s.dockT = .06; return; }
   }
-  const fwd = pull(s, r, i, s.dir); if (!fwd && pull(s, r, i, -s.dir)) s.dir = -s.dir; else if (!fwd) { // nothing to do in either direction
-    if (!s.cargo.length && !isSource(r, p)) { let best = -1; // wait at the nearest world that has something to sell on this route
-      r.stops.forEach((q, k) => { if (k !== i && isSource(r, q) && (best < 0 || Math.abs(k - i) < Math.abs(best - i))) best = k; });
-      if (best >= 0) { s.dir = best > i ? 1 : -1; depart(s); return; } }
-    s.dockT = .35; return;
+  const plan = freightPlan(s);
+  if (plan) {
+    s.dir = plan.dir;
+    if (plan.load) {
+      const { g, to, relay } = plan.load, dest = r.stops[to];
+      if (p.good === g && p.stock) p.stock--; else p.items.splice(p.items.indexOf(g), 1);
+      if (!relay) dest.res[g] = resOf(dest, g) + 1;
+      s.cargo.push({ g, to: dest, relay }); s.dockT = HANDLING_TIME; return;
+    }
+    depart(s); return;
   }
-  if (s.cargo.length < G.cap) { // load one unit for an order ahead (nearest first), before any depot relay
-    const way = side(r, i, s.dir), j = jobs(r, p).filter(j => way.includes(j[1])).sort((a, b) => a[2] - b[2] || way.indexOf(a[1]) - way.indexOf(b[1]))[0];
-    if (j) { const [g, z, relay, fromDepot] = j; if (fromDepot) p.items.splice(p.items.indexOf(g), 1); else p.stock--;
-      if (!relay) z.res[g] = resOf(z, g) + 1; s.cargo.push({ g, to: z, relay }); s.dockT = .13; return; }
+  if (!s.cargo.length && !isSource(r, p)) {
+    const nearby = side(r, i, s.dir).concat(side(r, i, -s.dir));
+    nearby.sort((a, b) => Math.abs(r.stops.indexOf(a) - i) - Math.abs(r.stops.indexOf(b) - i));
+    const source = nearby.find(q => isSource(r, q));
+    if (source) { s.dir = Math.sign(r.stops.indexOf(source) - i); depart(s); return; }
   }
-  depart(s);
+  s.dockT = .35;
 }
 
 /* ---------- player actions ---------- */
@@ -663,7 +847,7 @@ function resize() {
 }
 const sideDock = matchMedia('(min-width: 900px), (min-width: 560px) and (max-height: 500px)');
 function fitView() { // frame the current network and the next world inside the exposed chart
-  const dock = $('dock'), hint = $('hint');
+  const dock = $('dock-area'), hint = $('hint');
   viewTop = $('hud-top').offsetHeight + 4;
   viewBot = Math.max(viewTop + 1, sideDock.matches ? H - 8 : H - dock.offsetHeight - 4);
   viewRight = Math.max(1, sideDock.matches ? W - dock.offsetWidth : W);
@@ -679,6 +863,8 @@ function fitView() { // frame the current network and the next world inside the 
     min: Math.min(roomX, roomY) / (2 * (GAL_R + 80)) };
 }
 function aimCamera(snap) {
+  // Keep the projection and label bounds steady from picking up a route through its drop.
+  if (!snap && !G.over && (drag || pull2)) return;
   const f = fitView();
   if (G.over) { f.mx = G.over.x; f.my = G.over.y; f.s = Math.min(1.5, Math.max(.85, f.s * 1.4)); cam.manual = false; } // the view closes in on the world where trade collapsed
   if (snap || !cam.manual) { const k = snap ? 1 : cam.fast > 0 ? .16 : .03, k2 = snap ? 1 : cam.fast > 0 ? .25 : .08; if (cam.fast > 0) cam.fast--;
@@ -755,8 +941,9 @@ function render() {
     if (nx || d === hoverD) { ctx.font = '600 10px Figtree, system-ui, sans-serif'; ctx.fillStyle = C.muted; ctx.fillText(nx ? d.name + ' · next to join' : d.name, x, y + 20 * k + 4); } }
   // lanes
   laneOffsets(); ctx.lineCap = 'round';
-  for (const pass of [0, 1]) for (const r of G.routes) { const sel = r === G.sel; if (sel !== !!pass) continue;
-    ctx.globalAlpha = sel || !G.sel ? 1 : .38; ctx.strokeStyle = sel ? C.ink : C.lane; ctx.lineWidth = (sel ? 3.5 : 2) * Math.max(.7, U); ctx.beginPath();
+  const selectedRoute = pull2 ? pull2.r : G.sel;
+  for (const pass of [0, 1]) for (const r of G.routes) { const sel = r === selectedRoute; if (sel !== !!pass) continue;
+    ctx.globalAlpha = sel || !selectedRoute ? 1 : .38; ctx.strokeStyle = sel ? C.ink : C.lane; ctx.lineWidth = (sel ? 3.5 : 2) * Math.max(.7, U); ctx.beginPath();
     for (let k = 0; k < r.stops.length - 1; k++) { const s = segPts(r, k); ctx.moveTo(s.ax, s.ay); ctx.quadraticCurveTo(s.cx, s.cy, s.bx, s.by); } ctx.stroke();
     const s = segPts(r, 0), mx = (s.ax + 2 * s.cx + s.bx) / 4, my = (s.ay + 2 * s.cy + s.by) / 4;
     ctx.fillStyle = sel ? C.ink : C.bg; ctx.globalAlpha = 1; const B = Math.max(.8, U); ctx.beginPath(); ctx.arc(mx, my, 7.5 * B, 0, 6.2832); ctx.fill(); ctx.lineWidth = 1.5; ctx.stroke();
@@ -813,7 +1000,7 @@ function render() {
     else { glyph(p.good, x, y - R * .38, R * .27); glyph(p.good, x - R * .4, y + R * .28, R * .27); glyph(p.good, x + R * .4, y + R * .28, R * .27); }
     if (ping && ping.p === p) { const age = (performance.now() - ping.at) / 1000; if (age > 4) ping = null; else { ctx.strokeStyle = C.ink; // rings spreading out from the world a notification pointed at
       for (let i = 0; i < 2; i++) { const ph = (age * .9 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * Math.min(1, 4 - age); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, R + 6 + ph * 34 * Math.max(.75, U), 0, 6.2832); ctx.stroke(); } ctx.globalAlpha = 1; } }
-    if (G.sel && G.sel.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
+    if (selectedRoute && selectedRoute.stops.includes(p)) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     if (p === hover || (drag && drag.stops.includes(p))) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 3.5, 0, 6.2832); ctx.stroke(); }
     for (const q of drag ? drag.stops : hover ? [hover] : []) if (q !== p && p.wants.includes(q.good)) { ctx.strokeStyle = C.g[q.good]; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, P + 17, 0, 6.2832); ctx.stroke(); }
     if (p.over > 0) { ctx.strokeStyle = C.danger; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(x, y, P + 3.5, -1.5708, -1.5708 + p.over * 6.2832); ctx.stroke(); }
@@ -913,16 +1100,7 @@ function sampleFleet(r) {
   // alone are never evidence that a freighter is missing.
   let ready = 0;
   for (const p of r.stops) {
-    const destinations = new Map();
-    for (const [g, dest, relay] of jobs(r, p)) {
-      if (!destinations.has(g)) destinations.set(g, new Map());
-      const qty = relay ? Math.max(0, onwardOpen(dest, g, r) - buffered(dest, g)) : open(dest, g);
-      destinations.get(g).set(dest, qty);
-    }
-    for (const [g, demand] of destinations) {
-      const stock = (p.good === g ? p.stock : 0) + p.items.filter(item => item === g).length;
-      ready += Math.min(stock, [...demand.values()].reduce((sum, qty) => sum + qty, 0));
-    }
+    ready += waitingUnits(r, p);
     if (ready >= 2) break;
   }
   const idle = s => s.state === 'dock' && !s.cargo.length;
@@ -1080,6 +1258,11 @@ function laneAt(x, y) { // the route leg under the pointer
 const pos = e => { const b = cv.getBoundingClientRect(); mouse.x = e.clientX - b.left; mouse.y = e.clientY - b.top; };
 const ptrs = new Map(); let pan = null, pinch = null, lastPtr = '', pull2 = null; // pull2: a lane being dragged out to a world, to add it as a stop
 const pullOk = p => pull2 && p && G.routes.includes(pull2.r) && !pull2.r.stops.includes(p) && pull2.r.stops.length < MAX_STOPS;
+function addDragStop(p) {
+  if (!drag || !p || drag.stops.includes(p) || drag.ext?.stops.includes(p)) return;
+  const max = drag.ext ? MAX_STOPS - drag.ext.stops.length + 1 : MAX_STOPS;
+  if (drag.stops.length < max) drag.stops.push(p);
+}
 const gap = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
 cv.addEventListener('pointerdown', e => {
   lastPtr = e.pointerType; if (!started || G.over || e.button === 2) return; pos(e); ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
@@ -1090,7 +1273,7 @@ cv.addEventListener('pointerdown', e => {
     if (r && r.stops.length < MAX_STOPS) { if (r.stops[r.stops.length - 1] === p) ext = r; else if (r.stops[0] === p) { ext = r; atStart = true; } }
     drag = { stops: [p], ext, atStart }; return; }
   const l = laneAt(mouse.x, mouse.y);
-  if (l) { G.sel = l.r; pull2 = { r: l.r, k: l.k, x: mouse.x, y: mouse.y, moved: false }; cv.setPointerCapture(e.pointerId); } else { pan = { x: mouse.x, y: mouse.y, moved: 0 }; cv.setPointerCapture(e.pointerId); }
+  if (l) { pull2 = { r: l.r, k: l.k, x: mouse.x, y: mouse.y, moved: false }; cv.setPointerCapture(e.pointerId); } else { pan = { x: mouse.x, y: mouse.y, moved: 0 }; cv.setPointerCapture(e.pointerId); }
 });
 cv.addEventListener('pointermove', e => {
   pos(e); if (!started) return; if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: mouse.x, y: mouse.y });
@@ -1101,8 +1284,7 @@ cv.addEventListener('pointermove', e => {
   if (pull2 && Math.hypot(mouse.x - pull2.x, mouse.y - pull2.y) > 6) pull2.moved = true;
   hoverD = hover ? null : dormantAt(mouse.x, mouse.y);
   cv.style.cursor = hover || routeAt(mouse.x, mouse.y) ? 'pointer' : 'grab';
-  if (drag && hover && !drag.stops.includes(hover)) { const max = drag.ext ? MAX_STOPS - drag.ext.stops.length + 1 : MAX_STOPS;
-    if (drag.stops.length < max && !(drag.ext && drag.ext.stops.includes(hover))) drag.stops.push(hover); }
+  addDragStop(hover);
 });
 function drop() { if (!drag) return; const d = drag; drag = null;
   if (d.stops.length < 2) return; if (d.ext) extendRoute(d.ext, d.stops.slice(1), d.atStart); else createRoute(d.stops); }
@@ -1110,8 +1292,15 @@ function pointerEnd(e, cancel) {
   ptrs.delete(e.pointerId);
   if (pinch) { if (ptrs.size < 2) pinch = null; return; }
   if (pan) { if (pan.moved <= 5 && !cancel) G.sel = null; pan = null; return; }
-  if (pull2) { const l = pull2, p = planetAt(mouse.x, mouse.y); pull2 = null; if (!cancel && l.moved && p && G.routes.includes(l.r) && !l.r.stops.includes(p)) insertStop(l.r, l.k, p); return; }
-  if (cancel) drag = null; else drop();
+  if (pull2) {
+    const l = pull2; pull2 = null;
+    if (cancel || !G.routes.includes(l.r)) return;
+    G.sel = l.r;
+    if (l.moved) { pos(e); const p = planetAt(mouse.x, mouse.y); if (p && !l.r.stops.includes(p)) insertStop(l.r, l.k, p); }
+    return;
+  }
+  if (cancel) drag = null;
+  else if (drag) { pos(e); addDragStop(planetAt(mouse.x, mouse.y)); drop(); }
 }
 cv.addEventListener('contextmenu', e => { e.preventDefault(); if (!started || G.over || lastPtr === 'touch') return; // right-click a world on the selected route to take it off (a long press on a touch screen does nothing: use the route panel)
   pos(e); drag = null; pull2 = null; const p = planetAt(mouse.x, mouse.y); if (p && G.sel && G.sel.stops.includes(p)) removeStop(G.sel, p); });
@@ -1199,7 +1388,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 27, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 28, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches
@@ -1310,7 +1499,7 @@ $('lb-form').addEventListener('submit', e => {
 });
 readColors();
 addEventListener('resize', resize); new ResizeObserver(resize).observe(cv);
-new ResizeObserver(() => { cam.fast = 45; }).observe($('dock'));
+new ResizeObserver(() => { cam.fast = 45; }).observe($('dock-area'));
 newGame(today()); resize(); aimCamera(true); requestAnimationFrame(frame); // today's galaxy turns behind the title card
 lbLoad(); // after the first galaxy is dealt: the boards are drawn against it
 window.__ol = { get G() { return G; }, faced, reach, routeLive, routeBalance, fleetVerdict, tempoNow, cam, toScreen: p => [sx(p.x), sy(p.y)], step, createRoute, addShip, removeShip, removeRoute, removeStop, insertStop, extendRoute, buildDepot, buy, cost, shipsOn, begin, today, set manual(v) { manual = v; } };

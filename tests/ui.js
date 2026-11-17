@@ -1,5 +1,6 @@
 const { chromium } = require('playwright');
 const path = require('path');
+const assert = require('node:assert/strict');
 (async () => {
   const b = await chromium.launch();
   const pg = await b.newPage({ viewport: { width: 1200, height: 800 } });
@@ -21,5 +22,47 @@ const path = require('path');
   await pg.mouse.move(600, 380); await pg.mouse.wheel(0, 2000); await pg.waitForTimeout(100); const r6 = await pg.evaluate(() => ({ manual: __ol.cam.manual }));
   await pg.mouse.wheel(0, 4000); await pg.waitForTimeout(300); await pg.screenshot({ path: path.join(__dirname, 'galaxy.png') });
   console.log(JSON.stringify({ r1, r2, r3, r4, r5, r6, errs }));
+  // A wrapped world readout must leave the bottom dock and the route's drop target in place.
+  for (const width of [320, 390]) {
+    await pg.setViewportSize({ width, height: width === 320 ? 568 : 844 });
+    await pg.mouse.move(0, 0);
+    await pg.evaluate(() => {
+      __ol.begin('daily'); __ol.manual = true;
+      __ol.G.next = null;
+      const positions = [[-95, 90], [95, 90], [95, -90], [-95, -90]];
+      __ol.G.planets.forEach((p, i) => { [p.x, p.y] = positions[i]; });
+    });
+    await pg.waitForFunction(() => !document.getElementById('hint').hidden);
+    await pg.waitForFunction(() => __ol.cam.fast === 0);
+    const dock = pg.locator('#dock');
+    const height = (await dock.boundingBox()).height;
+    const point = i => pg.evaluate(i => __ol.toScreen(__ol.G.planets[i]), i);
+    await pg.mouse.move(...await point(0));
+    await pg.waitForFunction(() => document.getElementById('info').textContent.length > 0);
+    assert.equal((await dock.boundingBox()).height, height);
+    await pg.mouse.down();
+    const target = await point(1);
+    await pg.mouse.move(...target);
+    await pg.waitForFunction(() => document.getElementById('info').textContent.includes(__ol.G.planets[1].name));
+    assert.deepEqual(await point(1), target);
+    await pg.mouse.up();
+    await pg.waitForSelector('#routes .panel');
+    assert.equal(await pg.evaluate(() => __ol.G.sel.stops.length), 2);
+    // Let the first-route tutorial finish its camera adjustment before toggling the report.
+    await pg.waitForFunction(() => {
+      const y = __ol.toScreen(__ol.G.planets[0])[1], delta = Math.abs(y - window.lastWorldY);
+      window.lastWorldY = y;
+      return delta < .001;
+    }, null, { polling: 'raf' });
+    const reference = await point(0);
+    for (const state of ['hidden', 'visible']) {
+      await pg.locator('.route-list .chip').click();
+      await pg.locator('#routes .panel').waitFor({ state });
+      await pg.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const current = await point(0);
+      assert.ok(Math.hypot(current[0] - reference[0], current[1] - reference[1]) < .5, 'selecting or closing a route moved the map');
+    }
+  }
+  assert.deepEqual(errs, []);
   await b.close();
 })();

@@ -135,3 +135,210 @@ test('busy and lightly loaded routes produce different fleet readings under real
     assert.equal(o.fleetVerdict(r, o.routeBalance(r)), scenario.verdict);
   }
 });
+
+test('a docked freighter loads for the adjacent buyer before flying empty to another pickup', () => {
+  for (const heading of [1, -1]) {
+    const o = galaxy(), [buyer, seller, otherPickup] = o.G.planets;
+    want(buyer, seller.good, 0);
+    want(seller, otherPickup.good, 0);
+    buyer.orders[seller.good] = 2;
+    seller.orders[otherPickup.good] = 1;
+    seller.stock = 4;
+    otherPickup.stock = 1;
+
+    const stops = [buyer, seller, otherPickup];
+    const route = o.createRoute(heading === 1 ? stops : stops.reverse());
+    const [ship] = o.shipsOn(route);
+    Object.assign(ship, { at: seller, idx: 1, prev: 1, dir: heading });
+    run(o, 1);
+    assert.deepEqual(Array.from(ship.cargo, unit => unit.to.name), [buyer.name, buyer.name]);
+    assert.equal(seller.stock, 2);
+    assert.equal(buyer.res[seller.good], 2);
+    assert.equal(route.stops[ship.idx], buyer);
+    run(o, 30);
+    assert.equal(buyer.orders[seller.good], 0);
+    assert.equal(buyer.res[seller.good], 0);
+  }
+});
+
+test('an empty ship loads for a buyer one stop away before a buyer two stops away', () => {
+  const o = galaxy(), [near, seller, middle, far] = o.G.planets;
+  for (const buyer of [near, far]) {
+    want(buyer, seller.good, 0);
+    buyer.orders[seller.good] = 1;
+  }
+  seller.stock = 1;
+  seller.accS = 0;
+  const route = o.createRoute([seller, middle, far]);
+  o.extendRoute(route, [near], true);
+  run(o, 1);
+  const [ship] = o.shipsOn(route);
+  assert.equal(ship.cargo[0].to.name, near.name);
+  assert.equal(far.res[seller.good] || 0, 0);
+});
+
+test('an empty ship heads for the nearest uncovered pickup on either side of its stop', () => {
+  const o = galaxy(), [near, buyer, middle, far] = o.G.planets;
+  for (const seller of [near, far]) {
+    want(buyer, seller.good, 0);
+    buyer.orders[seller.good] = 1;
+    seller.stock = 1;
+  }
+  const route = o.createRoute([buyer, middle, far]);
+  o.extendRoute(route, [near], true);
+  run(o, 1);
+  const [ship] = o.shipsOn(route);
+  assert.equal(ship.state, 'fly');
+  assert.equal(route.stops[ship.idx], near);
+  run(o, 45);
+  assert.equal(buyer.orders[near.good], 0);
+});
+
+test('a through freighter picks up next-stop orders in its direction and keeps its original delivery', () => {
+  const o = galaxy(), [start, seller, next, terminus] = o.G.planets;
+  want(terminus, start.good, 0);
+  terminus.orders[start.good] = 1;
+  start.stock = 1;
+  for (const buyer of [start, next]) {
+    want(buyer, seller.good, 0);
+    buyer.orders[seller.good] = 1;
+  }
+  seller.stock = 2;
+  const route = o.createRoute([start, seller, next, terminus]), [ship] = o.shipsOn(route);
+  for (let i = 0; i < 800 && !(ship.state === 'fly' && ship.prev === 1); i++) o.step(.05);
+  assert.equal(ship.idx, 2);
+  assert.deepEqual(Array.from(ship.cargo, unit => unit.to.name), [terminus.name, next.name]);
+  assert.equal(start.res[seller.good] || 0, 0);
+  run(o, 45);
+  assert.equal(terminus.orders[start.good], 0);
+  assert.equal(next.orders[seller.good], 0);
+});
+
+test('one available unit at the next stop needs only one freighter even if more orders are open', () => {
+  const o = galaxy(), [seller, buyer] = o.G.planets;
+  want(buyer, seller.good, 0);
+  want(seller, buyer.good, 0);
+  buyer.orders[seller.good] = 8;
+  seller.stock = 1;
+  seller.accS = 0;
+  const route = o.createRoute([seller, buyer]);
+  o.addShip(route);
+  const [loading, standby] = o.shipsOn(route);
+  loading.dockT = .6;
+  run(o, 1);
+  assert.equal(loading.cargo.length, 1);
+  assert.equal(buyer.res[seller.good], 1);
+  assert.equal(standby.at, buyer);
+});
+
+function fixedStops(o) {
+  const stops = o.G.planets;
+  stops.forEach((p, i) => {
+    p.r = 600; p.ang = .3 * i; p.w = 0;
+    p.accS = -100; // observe only the freight specified by the case
+  });
+  return stops;
+}
+
+test('a through ship saves two slots for two short loads and carries one long load alongside them', () => {
+  const o = galaxy(), [a,b,c,d] = fixedStops(o);
+  o.G.cap = 3;
+  for (const [from, to, n] of [[a,d,3], [b,c,2], [c,d,2]]) {
+    want(to, from.good, 0); to.orders[from.good] = n; from.stock = n;
+  }
+  const r = o.createRoute([a,b,c,d]), [s] = o.shipsOn(r);
+  run(o, 1);
+  assert.equal(s.cargo.length, 1, 'load the spare slot for the far buyer');
+  assert.equal(d.res[a.good], 1);
+  assert.equal(c.res[b.good] || 0, 0, 'forecast pickups make no real reservation');
+  for (let i = 0; i < 1200 && r.sold.length < 5; i++) o.step(.05);
+  assert.equal(r.sold.length, 5);
+  assert.equal(c.orders[b.good], 0);
+  assert.equal(d.orders[c.good], 0);
+});
+
+test('a demand surge attracts a ship to the better-paying buyer at equal travel time', () => {
+  const o = galaxy(), [west, source, east] = fixedStops(o);
+  o.G.cap = 1; source.stock = 1;
+  for (const buyer of [west,east]) { want(buyer, source.good, 0); buyer.orders[source.good] = 1; }
+  o.G.rush = {p:west, g:source.good, until:100};
+  const r = o.createRoute([source,east]); o.extendRoute(r,[west],true);
+  run(o,1);
+  assert.equal(o.shipsOn(r)[0].cargo[0].to.name, west.name);
+  run(o,20);
+  assert.equal(o.G.earned, 10);
+});
+
+test('a world buys stock already dropped in its depot when it develops local demand', () => {
+  const o = galaxy(), [a,hub,b] = fixedStops(o), g = a.good;
+  o.G.credits = 1000;
+  o.buildDepot(hub);
+  want(b, g, 0); b.orders[g] = 1; a.stock = 2;
+  const feed = o.createRoute([a,hub]), onward = o.createRoute([hub,b]);
+  o.removeShip(onward);
+  for (let i = 0; i < 800 && hub.items.length < 2; i++) o.step(.05);
+  assert.equal(hub.items.length, 2);
+  assert.equal(feed.handoffs.length, 2);
+  o.removeRoute(onward);
+  want(hub, g, 0);
+  hub.purgeT = 0;
+  run(o,5);
+  assert.equal(hub.items.length, 2, 'keep stock for a local buyer even with no onward route');
+  hub.accD[g] = 1;
+  o.step(.05);
+  assert.equal(hub.items.length, 1);
+  assert.equal(hub.orders[g], 0);
+  assert.equal(o.G.earned, 5);
+  assert.equal(o.G.delivered, 1);
+  assert.equal(feed.sold.length, 0);
+  assert.equal(feed.handoffs.length, 2, 'local collection is not another shipment');
+  run(o,2);
+  assert.equal(o.G.earned, 5);
+});
+
+test('a local depot fills even a booked order and its inbound unit replenishes the depot', () => {
+  const o = galaxy(), [a,hub] = fixedStops(o), g = a.good;
+  want(hub,g,0); hub.orders[g] = 1; a.stock = 1;
+  const r = o.createRoute([a,hub]);
+  run(o,1);
+  assert.equal(hub.res[g], 1);
+  hub.depot = true; hub.items.push(g, g); hub.accD[g] = 1;
+  o.step(.05);
+  assert.equal(hub.res[g], 0);
+  assert.equal(hub.orders[g], 0);
+  assert.equal(o.G.earned, 11);
+  assert.equal(hub.items.length, 0);
+  assert.equal(o.shipsOn(r)[0].cargo[0].relay, true);
+  run(o,20);
+  assert.equal(hub.orders[g], 0);
+  assert.equal(hub.res[g], 0);
+  assert.equal(o.G.earned, 11);
+  assert.equal(r.sold.length, 0);
+  assert.equal(r.handoffs.length, 1);
+  assert.deepEqual(Array.from(hub.items), [g]);
+});
+
+test('the distress premium ends with the delivery that clears the threshold', () => {
+  const o = galaxy(), [a,hub] = fixedStops(o), g = a.good;
+  hub.depot = true; hub.items.push(g,g);
+  want(hub,g,0); hub.orders[g] = 6;
+  o.G.rush = {p:hub,g,until:100};
+  o.step(.05);
+  assert.equal(o.G.earned, 40); // (4 + 6) × 2 + 2, then (4 + 5) × 2
+  assert.equal(hub.orders[g], 4);
+});
+
+test('two ships at different suppliers can forecast the same buyer but only one books the order', () => {
+  const o = galaxy(), [left, buyer, right] = fixedStops(o);
+  right.good = left.good;
+  left.stock = right.stock = 1;
+  want(buyer, left.good, 0); buyer.orders[left.good] = 1;
+  const route = o.createRoute([left, buyer, right]);
+  o.addShip(route);
+  run(o,1);
+  assert.equal(buyer.res[left.good], 1);
+  assert.equal(o.shipsOn(route).reduce((n,s) => n + s.cargo.length, 0), 1);
+  run(o,20);
+  assert.equal(route.sold.length, 1);
+  assert.equal(left.stock + right.stock, 1);
+});

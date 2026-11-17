@@ -23,7 +23,7 @@ const { chromium } = require('playwright'); const path = require('path');
   ok('the same map every time', a.map === c.map && a.map === d.map);
   ok('the same worlds, goods, growth and events at 60 and 144 frames a second', JSON.stringify(a.log) === JSON.stringify(c.log));
   ok('and whatever the player does', JSON.stringify(a.log) === JSON.stringify(d.log));
-  ok('a full run: 14 worlds and several events', a.worlds === 14 && a.events >= 6);
+  ok('fifteen minutes: 14 worlds and several events', a.worlds === 14 && a.events >= 6);
   const t = await play('daily', 1 / 60, false, '2031-05-06'), r1 = await play('random', 1 / 60), r2 = await play('random', 1 / 60);
   ok('another day is another galaxy', t.day === '2031-05-06' && t.map !== a.map && JSON.stringify(t.log) !== JSON.stringify(a.log));
   ok('random galaxies differ from today’s and from each other', r1.day === null && r1.map !== a.map && r1.map !== r2.map);

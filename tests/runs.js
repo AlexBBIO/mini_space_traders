@@ -51,7 +51,7 @@ const call = (method, body, url, ip) => new Promise(done => { const res = { code
   await pg.waitForSelector('#over:not([hidden])', { timeout: 240000 }); await pg.waitForTimeout(800);
   const list = (await call('GET')).body.runs.filter(r => !/^rspam|^rabc|^rmany/.test(r.id)), full = list[0] && (await call('GET', null, '/api/runs?latest=1')).body.run;
   ok('the played run was saved by the page', list.length === 1 && list[0].ended === true && !!list[0].collapsedAt);
-  ok('it records each good\'s supply, demand and missing links', !!full && full.version === 32 && /^daily \d{4}-\d\d-\d\d$/.test(full.galaxy) && full.timeline.length > 1 && full.timeline[0].goods.length >= 4 && 'buyersWithNoRouteToASeller' in full.timeline[0].goods[0]);
+  ok('it records each good\'s supply, demand and missing links', !!full && full.version === 33 && /^daily \d{4}-\d\d-\d\d$/.test(full.galaxy) && full.timeline.length > 1 && full.timeline[0].goods.length >= 4 && 'buyersWithNoRouteToASeller' in full.timeline[0].goods[0]);
   await pg.click('#copy-log'); await pg.waitForTimeout(200);
   const clip = await pg.evaluate(() => navigator.clipboard.readText()), msg = await pg.textContent('#copy-msg');
   ok('a record over 64 KB is still saved', !!full && full.ended === true && JSON.stringify(full).length > 66000);

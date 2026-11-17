@@ -290,7 +290,7 @@ const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
-const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 2.7, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
+const READY = 3, SETTLE = 12, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 2.7, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
@@ -360,7 +360,7 @@ function nextWorld() { // the dormant world nearest the middle of the network wa
   let best = null, bd = Infinity; for (const d of G.dormant) { const m = Math.hypot(d.x - cx, d.y - cy); if (m < bd) { bd = m; best = d; } } return best;
 }
 function setNext() { // which world joins next (the nearest the middle of the network) and what it will sell. Both are settled as soon as the last one has joined, and shown on the map
-  const d = G.planets.length < MAXP ? nextWorld() : null;
+  const d = nextWorld(); // the galaxy never stops expanding while it has a dormant world left
   if (d) { if (G.nextGood == null) G.nextGood = chooseGood(); d.good = G.nextGood; }
   G.next = d;
 }
@@ -382,8 +382,8 @@ function nameIt() {
    - A world grows a level: it makes one more unit (into the pool) and buys one more unit (out of the pool), of a new good or more of one it has.
    - Now and then a world grows by wanting the good the next newcomer will sell, before that world has joined. That good is then one unit short
      until it arrives: pool[g] is -1 for that while, and never lower.
-   - A good never sits unbought. When the next newcomer brings a good the network has never had (Fuel, with the seventh world), the world that
-     grows before it always wants that good, so its first seller arrives to a waiting buyer. */
+   - A newcomer may bring a good nobody buys yet (Fuel, with the seventh world). That is settled quickly: a world grows SETTLE seconds after it
+     joins instead of midway to the next arrival, and takes the unbought good. No second seller of it joins before then. */
 function spareFor(p) { // the good p should buy its next unit of: whichever other good has most to spare, preferring one it does not buy yet. A good with no buyer at all comes first
   const can = G.pool.map((v, g) => g).filter(g => g !== p.good && G.pool[g] > 0); if (!can.length) return null;
   const lone = can.filter(unbought); if (lone.length) return pick(lone, RP);
@@ -396,12 +396,12 @@ function buyUnit(p, g) { // p wants one more unit of g from now on
 }
 function grow() { // one world goes up a level
   for (const p of shuffle(G.planets.filter(p => p.level < MAX_LEVEL && G.sec - p.bornS > 40), RP)) {
-    const debut = G.next && !G.planets.some(q => q.good === G.nextGood); // the next world brings a good the network has never had: it must arrive to a waiting buyer
-    const ahead = G.next && G.nextGood !== p.good && G.pool[G.nextGood] === 0 && G.nextPlanetT - G.sec < 45 && (debut || RP() < .4); // it wants what the next world will bring
+    const ahead = G.next && G.nextGood !== p.good && G.pool[G.nextGood] === 0 && G.nextPlanetT - G.sec < 45 && RP() < .4; // it wants what the next world will bring
+    const debut = ahead && !G.planets.some(q => q.good === G.nextGood); // and that is a good the network has never had
     G.pool[p.good]++; const g = ahead ? G.nextGood : spareFor(p);
     if (g == null || (G.next && !G.pool.some((v, h) => h !== G.nextGood && v - (h === g) > 0))) { G.pool[p.good]--; continue; } // nothing to buy, or it would leave the next newcomer nothing to buy
     p.level++; p.grewAt = G.t; buyUnit(p, g); sfx('join'); logEvent('grew to level ' + p.level + ', wants ' + GOODS[g] + (ahead ? ' (ahead of supply)' : ''), p.name);
-    toast(ahead && debut ? `${p.name} has grown. It wants ${gn(g)}, a new good that arrives when ${G.next.name} joins.` : ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
+    toast(debut ? `${p.name} has grown. It wants ${gn(g)}, a new good that arrives when ${G.next.name} joins.` : ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
 }
 /* How many open orders put a world in trouble: 2.7 for each unit it makes, rounded, and never fewer than six. A bigger world wants more, so its
    orders come in faster; the limit grows with it, and a level 3 world can carry eight. Orders stop arriving ORD_ROOM above the limit. */
@@ -455,8 +455,9 @@ function diagTick(gap, dt) {
     if (G.planets.some(s => s.good === g && !sellers.includes(s) && !G.routes.some(r => r.stops.includes(s)))) d.sellerElsewhere += dt; }
 }
 function plan(s) { // the run's timetable: worlds joining and growing, and events. It is worked through once a second, on whole seconds only, so a day's galaxy unfolds the same at any frame rate
-  if (s >= G.nextPlanetT && G.planets.length < MAXP && G.dormant.length) { awaken(); G.nextPlanetT = s + 70 + G.planets.length * 2; G.nextGrowT = G.planets.length < MAXP && G.dormant.length ? G.nextPlanetT - 35 : s + 75; } // a world grows midway between arrivals
-  if (s >= G.nextGrowT) { grow(); G.nextGrowT = G.planets.length < MAXP && G.dormant.length ? Infinity : s + 75; }
+  if (s >= G.nextPlanetT && G.dormant.length) { awaken(); G.nextPlanetT = s + 70 + G.planets.length * 2; // worlds keep joining for as long as the galaxy has any left, a little further apart each time
+    G.nextGrowT = GOODS.some((_, g) => unbought(g)) ? s + SETTLE : G.dormant.length ? G.nextPlanetT - 35 : s + 75; } // a world grows midway between arrivals, or soon after one whose good has no buyer yet
+  if (s >= G.nextGrowT) { grow(); G.nextGrowT = G.dormant.length ? Infinity : s + 75; }
   if (G.rush && s >= G.rush.until) G.rush = null;
   if (G.crunch && s >= G.crunch.until) G.crunch = null;
   if (!G.rush && !G.crunch && s >= G.nextRushT) { // events knock a balanced network off balance for a while
@@ -1437,7 +1438,7 @@ const LOG = { db: null, run: null, id: '', busy: false, dirty: false, next: 30, 
 if (window.claude && window.claude.use) window.claude.use('db').then(d => { LOG.db = d; }, () => {});
 function logStart() {
   LOG.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LOG.next = 30;
-  LOG.run = { version: 32, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
+  LOG.run = { version: 33, galaxy: G.day ? 'daily ' + G.day : 'random', seed: G.seed, stopsRemoved: 0, audioDrops: 0, started: new Date().toISOString(), window: W + 'x' + H, ended: false, seconds: 0, delivered: 0, earned: 0, realSecondsAtSpeed: { paused: 0, x1: 0, x2: 0, x3: 0 },
     routesOpened: 0, routesRemoved: 0, zoomedOrPanned: false, music: A.music, soundEffects: A.sfx, purchases: [], events: [], timeline: [] };
 }
 const fedBy = (p, g) => G.routes.some(r => r.stops.includes(p) && (r.stops.some(z => z.good === g) // some route brings g to p: straight from a seller, or through a depot that another route with a seller reaches

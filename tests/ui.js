@@ -62,6 +62,28 @@ const assert = require('node:assert/strict');
       const current = await point(0);
       assert.ok(Math.hypot(current[0] - reference[0], current[1] - reference[1]) < .5, 'selecting or closing a route moved the map');
     }
+    // Check the labels the canvas actually draws, including after zooming in on a busy depot.
+    await pg.evaluate(() => {
+      const p = __ol.G.planets[0]; p.depot = true; p.items = [0, 1, 2, 3, 4]; p.orders[p.wants[0]] = 9;
+    });
+    for (const zoomIn of [false, true]) {
+      if (zoomIn) await pg.click('#z-in');
+      const labels = await pg.evaluate(async () => {
+        const ctx = document.getElementById('c').getContext('2d'), original = ctx.fillText, drawn = [];
+        ctx.fillText = function (name, x, y, ...args) {
+          const world = __ol.G.planets.find(p => p.name === name);
+          if (world) {
+            const t = ctx.getTransform(), [px, py] = __ol.toScreen(world), dpr = document.getElementById('c').width / document.getElementById('c').clientWidth;
+            drawn.push({ dx: (x * t.a + t.e) / dpr - px, dy: (y * t.d + t.f) / dpr - py });
+          }
+          return original.call(ctx, name, x, y, ...args);
+        };
+        try { await new Promise(requestAnimationFrame); } finally { ctx.fillText = original; }
+        return drawn;
+      });
+      assert.equal(labels.length, 4);
+      assert.ok(labels.every(p => Math.abs(p.dx) < .01 && p.dy > 10), 'world name left its anchor');
+    }
   }
   assert.deepEqual(errs, []);
   await b.close();

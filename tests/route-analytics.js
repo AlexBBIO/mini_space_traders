@@ -11,7 +11,7 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 function galaxy() {
   const noop = () => {};
   const el = { addEventListener: noop, setAttribute: noop, querySelector: () => el,
-    getContext: () => ({ setTransform: noop }), getBoundingClientRect: () => ({ width: 1280, height: 800 }),
+    getContext: () => ({ setTransform: noop, measureText: text => ({ width: text.length * 6 }) }), getBoundingClientRect: () => ({ width: 1280, height: 800 }),
     offsetHeight: 120, offsetWidth: 300, children: [], appendChild: noop };
   class FixedDate extends Date {
     constructor(...args) { super(...(args.length ? args : ['2026-11-17T12:00:00Z'])); }

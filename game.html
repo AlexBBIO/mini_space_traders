@@ -282,7 +282,7 @@ const $ = id => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d');
 const GOODS = ['Ore', 'Water', 'Grain', 'Tech', 'Fuel'];
 const gn = g => `<b class="gd" style="color:var(--g${g})">${GOODS[g]}</b>`; // a good's name in its own colour, wherever text mentions it
-const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 3, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
+const READY = 3, MAXP = 14, GAL_R = 1150, CORE = 150, SLOTS = 8, CRIT = 6, CRIT_PER_LEVEL = 2.7, ORD_ROOM = 3, DEPOT_CAP = 12, AHEAD = 2, CLEAR = 215, DOCK_R = 18, MAX_STOPS = 5, REDEPLOY = 6;
 const SYL = ['ve', 'sh', 'or', 'u', 'kel', 'ta', 'mi', 'ra', 'zo', 'en', 'il', 'pha', 'no', 'qua', 'bri', 'dax', 'lu', 'ye', 'hal', 'os'];
 const orbW = r => .00312 * (300 / r); // the galaxy turns very slowly, its inner parts a little faster: a full turn takes over half an hour
 const SCALE = [.74, 1, 1.28], UNIT = .5, RHO = .92, WANT = RHO * UNIT, MAX_LEVEL = 3, SPARE = 2;
@@ -389,9 +389,9 @@ function grow() { // one world goes up a level
     p.level++; p.grewAt = G.t; buyUnit(p, g); sfx('join'); logEvent('grew to level ' + p.level + ', wants ' + GOODS[g] + (ahead ? ' (ahead of supply)' : ''), p.name);
     toast(ahead ? `${p.name} has grown. It wants ${gn(g)}, which is short until ${G.next.name} joins.` : `${p.name} has grown: it makes more ${gn(p.good)} and wants more ${gn(g)}.`, ahead, p); return; }
 }
-/* How many open orders put a world in trouble: three for each unit it makes, and never fewer than six. A bigger world wants more, so its orders
-   come in faster; the limit grows with it, and a level 3 world can carry nine. Orders stop arriving ORD_ROOM above the limit. */
-const crit = p => Math.max(CRIT, CRIT_PER_LEVEL * p.level);
+/* How many open orders put a world in trouble: 2.7 for each unit it makes, rounded, and never fewer than six. A bigger world wants more, so its
+   orders come in faster; the limit grows with it, and a level 3 world can carry eight. Orders stop arriving ORD_ROOM above the limit. */
+const crit = p => Math.max(CRIT, Math.round(CRIT_PER_LEVEL * p.level));
 const ordersOf = (p, g) => p.orders[g] || 0;
 const totalOrders = p => p.wants.reduce((n, g) => n + ordersOf(p, g), 0);
 const resOf = (p, g) => p.res[g] || 0, open = (p, g) => ordersOf(p, g) - resOf(p, g); // open = orders with no unit on the way yet
